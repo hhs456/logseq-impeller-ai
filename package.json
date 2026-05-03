@@ -1,0 +1,13 @@
+{
+  "name": "logseq-impeller-ai",
+  "version": "0.1.0",
+  "description": "A universal, LLM-agnostic assistant for Logseq. Features an interactive chat interface and one-click 'Apply' to restructure notes while preserving [[Backlinks]] and #Tags.",
+  "main": "index.js",
+  "author": "TinkerPump (Hanson)",
+  "logseq": {
+    "id": "logseq-impeller-ai",
+    "title": "Impeller AI: Universal LLM Portal",
+    "icon": "./logo.png",
+    "category": "Tools"
+  }
+}

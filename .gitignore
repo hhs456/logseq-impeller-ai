@@ -1,0 +1,19 @@
+# --- 系統檔案 ---
+.DS_Store
+Thumbs.db
+*.log
+
+# --- 開發環境與私密資訊 ---
+.env
+.env.local
+.env.*.local
+secrets.json
+
+# --- Node / Vite 相關 (預留未來使用) ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# --- Logseq 產生的暫存檔 ---
+.logseq/
