@@ -1,57 +1,80 @@
 # 🌀 Impeller AI
 
-**Impeller AI** is the high-performance engine for your Logseq graph. It acts as a **Universal LLM Portal**, providing a seamless bridge between your raw thoughts and a structured knowledge system. 
+**Impeller AI** is the high-performance engine for your Logseq graph. Version 0.2.0 brings a deep integration with the **Logseq Right Sidebar**, providing a more natural and powerful workspace for AI-human collaboration.
 
-Crafted by **TinkerPump (Hanson)**, it's designed to "pump" intelligence directly into your workflow without compromising the integrity of your graph.
+Crafted by **TinkerPump (Hanson)**, it acts as a **Universal LLM Portal** that pumps intelligence into your notes while strictly respecting your graph's structure.
 
 ---
 
-### 🌟 The Core Pillars
+### 🌟 New in v0.2.0: The Sidebar Evolution
 
-1. **The Contextual Intake (The Eyes) 🤖**  
-   An interactive sidebar that "sees" your current page context. Chat naturally with your notes—no more manual copy-pasting or losing focus.
+1. **Native Sidebar Integration 🧬** The UI now resides in your **Right Sidebar**. It stays with you as you navigate through different pages, making it a true companion to your creative flow.
 
-2. **The Structural Reflow (The Hands) ✨**  
-   The **Impeller** doesn't just talk; it acts. Use the **✨ Apply** button or `/AI-Format-Page` command to physically restructure messy notes into organized, hierarchical Markdown lists.
+2. **Smart "Apply" Logic ✨** The **Impeller** is now smarter. When you click **Apply**:
+   - **No Chat History?** It performs a high-fidelity **Reformat**, optimizing your page structure.
+   - **With Chat History?** It analyzes your conversation to either **Rewrite** the page or **Append** new ideas precisely where they belong.
 
-3. **Preservation Protocol 🛡️**  
-   Intelligence that respects your system. It refactors content while **strictly preserving all [[Backlinks]] and #Tags**, ensuring your graph remains fully connected and searchable.
+3. **Total Control (Abort Task) ⏹️** Added a **Stop Button** supported by `AbortController`. Instantly cancel any AI request if you change your mind, saving your API tokens and time.
 
-4. **Bring Your Own Engine (BYOE) 🔌**  
-   Truly LLM-agnostic. Connect to any API (OpenAI, Claude, or OpenRouter) via custom endpoints. You control the brain; we provide the interface.
+4. **Background Awareness 💬** Working on multiple pages? Impeller keeps track. If an AI task finishes while you're on a different page, a notification will let you know your results are ready.
+
+---
+
+### 🛡️ Core Pillars
+
+- **Preservation Protocol**: Strictly preserves all **[[Backlinks]]** and **#Tags**. Your graph connectivity is never compromised.
+- **BYOE (Bring Your Own Engine)**: Connect to any LLM (OpenAI, Claude, OpenRouter) via custom API endpoints.
+- **Theme Synchronized**: Automatically adapts to your Logseq theme (Dark/Light) using native CSS variables.
 
 ---
 
 ### 🚀 Usage
 
-- **Initialize**: Click the 🤖 icon in the toolbar to engage the **Impeller Sidebar**.
-- **Interact**: Type your needs in the chat area (**Enter** to send, **Shift+Enter** for newline).
-- **Execute**: Click **✨ Apply** to witness your raw notes transform into a structured masterpiece.
-- **Shortcut**: Invoke `/AI-Format-Page` directly from your blocks to trigger a quick reflow.
+- **Activate**: Click the **AI Assistant** text in your toolbar to toggle the **Impeller Sidebar**.
+- **Interact**: Type your needs (**Enter** to send, **Shift+Enter** for newline).
+- **Reflow**: Click **✨ Apply** to transform your notes or execute complex instructions.
+- **Stop**: Use the **⏹️** button to cancel an ongoing generation.
 
 ---
 
 ### 🛠️ Configuration
 
-Setup is simple through the Logseq Settings:
-- **API Key**: Your secret key to the LLM engine.
-- **Model**: Choose your favorite (e.g., `anthropic/claude-3.5-sonnet`).
-- **Base Path**: Support for OpenRouter, Local LLMs, and custom endpoints.
-- **Custom Prompt**: Tailor the "Apply" behavior to your specific style.
-
----
+Configure via Logseq Settings:
+- **API Key**: Your secret key for the LLM.
+- **Model**: Your preferred model (e.g., `openai/gpt-4o-mini`).
+- **Base Path**: Custom endpoints for OpenRouter or Local LLMs.
+- **Custom Tag**: Define the header under which AI results are placed.
 
 ### 📺 Video Demo
 
-[![Impeller AI Demo](https://img.youtube.com/vi/t6ZrzyaYTWg/maxresdefault.jpg)](https://youtu.be/t6ZrzyaYTWg)  
-*(Note: Video demonstrates v0.1.0 core features and interface)*
+[![Impeller AI Demo](https://img.youtube.com/vi/NQm55NCPv98/maxresdefault.jpg)](https://youtu.be/NQm55NCPv98)  
+*(Note: Video demonstrates v0.2.0 core features and interface)*
+
+---
+
+## 🗺️ Roadmap
+
+Impeller AI is under active development. Here is what's coming next:
+
+- **v0.3.0 (In Progress)**: 
+  - [ ] Migration to **Vite** for a more robust build pipeline.
+  - [ ] Refined UI styling and smoother animations.
+- **v0.4.0 (Planned)**: 
+  - [ ] **AI Tool Calling**: Let the AI decide when to apply changes or search.
+  - [ ] **Web Search**: Real-time information fetching.
+- **v0.5.0 (Goal)**: 
+  - [ ] **Local LLM Support**: Seamless integration with Ollama and LM Studio.
+  - [ ] **Onboarding Experience**: Improved settings and first-time guide.
+
+---
+
+## 📜 Versioning & Changes
+
+We use [Semantic Versioning](https://semver.org/) for this project.  
+Check out the [CHANGELOG.md](./CHANGELOG.md) for full release notes and update history.
 
 ---
 
 ### 📄 License
 
-This project is licensed under the **MIT License**. See the `LICENSE` file for details.
-
----
-
-*“Transforming the way you think, one block at a time.”* — **TinkerPump**
+This project is licensed under the **MIT License**.
