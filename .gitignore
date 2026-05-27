@@ -9,9 +9,9 @@ Thumbs.db
 .env.*.local
 secrets.json
 
-# --- Node / Vite 相關 (預留未來使用) ---
+# --- Node / Vite 相關 ---
 node_modules/
-dist/
+# dist/
 dist-ssr/
 *.local
 
