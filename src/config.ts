@@ -26,7 +26,8 @@ export const I18N = {
         settingApiKeyDesc: "請填入你的 LLM API Key (如 OpenAI, OpenRouter 等)",
         settingModelDesc: "設定你要使用的模型名稱 (例如: openai/gpt-4o-mini)",
         settingBasePathDesc: "若使用本地端 (如 Ollama) 或代理伺服器，請在此更改 API 端點",
-        settingTagDesc: "AI 輸出結果時自動加上標籤或標題 (預設: 🤖 AI 處理結果)"
+        settingTagDesc: "AI 輸出結果時自動加上標籤或標題 (預設: 🤖 AI 處理結果)",
+        settingWebApiKeyDesc: "請輸入您的搜尋引擎 API Key（用於啟用 AI 聯網搜尋技能）"
     },
     "en": {
         langName: "English",
@@ -52,7 +53,8 @@ export const I18N = {
         settingApiKeyDesc: "Enter your LLM API Key (e.g., OpenAI, OpenRouter)",
         settingModelDesc: "Set the model name you want to use (e.g., openai/gpt-4o-mini)",
         settingBasePathDesc: "Change the API endpoint if using a local server (like Ollama) or proxy",
-        settingTagDesc: "Custom tag or header for AI output (Default: 🤖 AI Result)"
+        settingTagDesc: "Custom tag or header for AI output (Default: 🤖 AI Result)",
+        settingWebApiKeyDesc: "Please enter your search engine API key (to enable the AI web search skill)."
     }
 };
 

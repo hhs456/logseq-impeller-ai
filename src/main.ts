@@ -9,36 +9,43 @@ async function main() {
     state.t = config.preferredLanguage?.startsWith("zh") ? I18N["zh-TW"] : I18N["en"];
 
     logseq.useSettingsSchema([
-        { 
-            key: "apiKey", 
-            type: "string", 
-            title: "1. API Key", 
+        {
+            key: "apiKey",
+            type: "string",
+            title: "1. API Key",
             description: state.t.settingApiKeyDesc, // 👈 使用 i18n
-            default: "" 
+            default: ""
         },
-        { 
-            key: "model", 
-            type: "string", 
-            title: "2. Model", 
+        {
+            key: "model",
+            type: "string",
+            title: "2. Model",
             description: state.t.settingModelDesc, // 👈 使用 i18n
-            default: "openai/gpt-4o-mini" 
+            default: "openai/gpt-4o-mini"
         },
-        { 
-            key: "basePath", 
-            type: "string", 
-            title: "3. API Endpoint", 
+        {
+            key: "basePath",
+            type: "string",
+            title: "3. API Endpoint",
             description: state.t.settingBasePathDesc, // 👈 使用 i18n
-            default: "https://openrouter.ai/api/v1" 
+            default: "https://openrouter.ai/api/v1"
         },
-        { 
-            key: "tag", 
-            type: "string", 
-            title: "4. Custom Tag", 
+        {
+            key: "tag",
+            type: "string",
+            title: "4. Custom Tag",
             description: state.t.settingTagDesc, // 👈 使用 i18n
-            default: state.t.tagDefault 
+            default: state.t.tagDefault
+        },
+        {
+            key: "webApiKey",
+            type: "string",
+            title: "5. Web Search API Key",
+            description: state.t.settingWebApiKeyDesc, // 👈 使用 i18n
+            default: "",
         }
     ]);
-    
+
     // 將所有行為綁定給 UI data-on-click 使用
     logseq.provideModel(actions);
 

@@ -6,10 +6,13 @@ Crafted by **TinkerPump (Hanson)**, it acts as a **Universal LLM Portal** that p
 
 ---
 
-### 🌟 New in v0.3.0: The Industrial-Grade Evolution
+### 🌟 New in v0.4.0: The Intelligence & Structure Leap
 
-1. **Vite & TypeScript Engine ⚡** The entire plugin has been refactored from scratch using TypeScript and Vite. This physical modularization ensures blazing-fast UI responsiveness, ultra-lightweight asset footprint, and robust stability.
-2. **Marketplace Ready 📦** Fully optimized bundling pipeline compiled into a standalone `dist/` distribution, perfectly aligned with the official Logseq Marketplace standard.
+1. **Web Search Integration 🌍** AI now has real-time internet access via Tool Calling. It autonomously fetches current events and factual data to completely eliminate hallucinations, always citing its sources at the end of the response.
+2. **Native Hierarchical Parsing 🌳** No more flat lists. The new write engine intelligently parses AI Markdown into Logseq's native nested tree structure (`IBatchBlock`), keeping your outlines perfectly indented and collapsible.
+3. **Auto Bi-Directional Linking 🔗** The prompt engine automatically identifies key entities, proper nouns, and core concepts, wrapping them in `[[wiki-links]]` to instantly weave new knowledge into your existing graph.
+
+*(Note: The codebase is fully modularized with Vite & TypeScript for blazing-fast performance since v0.3.0).*
 
 ---
 
@@ -46,6 +49,7 @@ Crafted by **TinkerPump (Hanson)**, it acts as a **Universal LLM Portal** that p
 Configure via Logseq Settings:
 - **API Key**: Your secret key for the LLM.
 - **Model**: Your preferred model (e.g., `openai/gpt-4o-mini`).
+- **Web Search API Key**: Your search engine API key (e.g., Tavily) to enable AI internet access.
 - **Base Path**: Custom endpoints for OpenRouter or Local LLMs.
 - **Custom Tag**: Define the header under which AI results are placed.
 
@@ -60,12 +64,12 @@ Configure via Logseq Settings:
 
 Impeller AI is under active development. Here is what's coming next:
 
-- **v0.4.0 (Planned)**: 
-  - [ ] **AI Tool Calling**: Let the AI decide when to apply changes or search.
-  - [ ] **Web Search**: Real-time information fetching.
 - **v0.5.0 (Goal)**: 
-  - [ ] **Local LLM Support**: Seamless integration with Ollama and LM Studio.
-  - [ ] **Onboarding Experience**: Improved settings and first-time guide.
+  - [ ] **Local LLM Support**: Seamless integration with Ollama and LM Studio for offline privacy.
+  - [ ] **Onboarding Experience**: Improved settings UI and first-time user guide.
+- **v0.6.0 (Vision)**: 
+  - [ ] **Custom Prompt Library**: Allow users to save and trigger specific workflows.
+  - [ ] **Cross-Page Context**: Give AI the ability to read multiple referenced pages at once.
 
 ---
 
