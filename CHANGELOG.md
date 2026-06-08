@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [0.5.0] - 2026-06-09
+
+### Added
+- **Smart Memory Management**: Introduced `MemoryManager` with a sliding window approach and auto-compression to prevent context overflow and save API tokens.
+- **Advanced Message Controls**: Added hover UI buttons for individual chat messages (Copy, Delete, Regenerate) with robust state handling and iframe clipboard bypass.
+
+### Changed
+- **Keyboard UX Optimization**: Intercepted textarea event bubbling for `Enter` (send) and `Shift+Enter` (newline) to prevent conflicts with Logseq's native keybindings.
+- **Graceful Task Abort**: Refactored `AbortError` handling to preserve tool execution logs (e.g., Web Search traces) and output a clean summary.
+- **Render Optimization & Safeguards**: Automatically prepends a horizontal rule (`---`) to custom tags and added an empty-page check for the Format Page command to prevent unnecessary API calls.
+
 ## [0.4.0] - 2026-06-03
 
 ### Added

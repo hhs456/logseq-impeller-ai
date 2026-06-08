@@ -21,12 +21,15 @@ export async function writeToLogseq(aiMarkdown: string, targetUuid: string) {
     const { tag } = logseq.settings!;
     const tagText = tag || state.t.tagDefault;
 
+// 🎯 關鍵優化：建立一個包含分割線與換行的複合標籤文字
+    // 這樣在 Logseq 渲染時會自動在該 Block 最上方畫出一條水平線，再接標籤文字
+    const tagWithSeparator = `--- \n${tagText}`;
+
     // 1. 清理 Markdown 標籤 (保留你的原邏輯)
     const cleanMarkdown = aiMarkdown
         .replace(/```markdown/g, '')
         .replace(/```/g, '')
         .trim();
-
     // 2. 內部函式：將純文字 Markdown 解析成 Logseq 樹狀結構 (新邏輯，取代原本的 .map)
     const parseMarkdownToTree = (text: string) => {
         const lines = text.split('\n');
@@ -70,12 +73,13 @@ export async function writeToLogseq(aiMarkdown: string, targetUuid: string) {
     const batchBlocks = parseMarkdownToTree(cleanMarkdown);
     if (batchBlocks.length === 0) return;
 
-    // 3. 取得頁面所有區塊並尋找舊的標籤區塊 (保留你的原邏輯)
+    // 3. 取得頁面所有區塊並尋找舊的標籤區塊
     let blocks = await logseq.Editor.getPageBlocksTree(targetUuid);
 
     const findOld = (tree: any[]): any => {
         for (let b of tree) {
-            if (b.content.includes(tagText)) return b;
+            // 💡 這裡依然用原本的 tagText 查水表，不管前面有沒有加 --- 都能精準命中！
+            if (b.content.includes(tagText)) return b; 
             if (b.children) { 
                 const res = findOld(b.children); 
                 if (res) return res; 
