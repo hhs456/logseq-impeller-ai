@@ -27,7 +27,18 @@ export const I18N = {
         settingModelDesc: "設定你要使用的模型名稱 (例如: openai/gpt-4o-mini)",
         settingBasePathDesc: "若使用本地端 (如 Ollama) 或代理伺服器，請在此更改 API 端點",
         settingTagDesc: "AI 輸出結果時自動加上標籤或標題 (預設: 🤖 AI 處理結果)",
-        settingWebApiKeyDesc: "請輸入您的搜尋引擎 API Key（用於啟用 AI 聯網搜尋技能）"
+        settingWebApiKeyDesc: "請輸入您的搜尋引擎 API Key（用於啟用 AI 聯網搜尋技能）",
+        // --- RAG 與向量搜尋相關 ---
+        ragInitModel: "🧠 首次載入或更新模型中，需稍候 (約 90MB)...",
+        ragIndexing: "⏳ 發現 {count} 筆新筆記或修改，正在建立神經索引...",
+        ragSyncDone: "✅ 增量更新完成！",
+        ragSyncFailed: "❌ 本地 AI 大腦啟動失敗",
+        ragNoRefsFound: "知識庫中沒有找到與 [[{targetPage}]] 關聯的筆記。",
+        ragRefsFound: "以下是所有關聯到 [[{targetPage}]] 的筆記：\n",
+        ragQueryError: "查詢 [[{targetPage}]] 時發生錯誤。",
+        // --- 匯出功能 ---
+        exportNoChat: "目前沒有對話可以匯出喔！",
+        exportSuccess: "✅ 已匯出對話：{name}",
     },
     "en": {
         langName: "English",
@@ -54,7 +65,18 @@ export const I18N = {
         settingModelDesc: "Set the model name you want to use (e.g., openai/gpt-4o-mini)",
         settingBasePathDesc: "Change the API endpoint if using a local server (like Ollama) or proxy",
         settingTagDesc: "Custom tag or header for AI output (Default: 🤖 AI Result)",
-        settingWebApiKeyDesc: "Please enter your search engine API key (to enable the AI web search skill)."
+        settingWebApiKeyDesc: "Please enter your search engine API key (to enable the AI web search skill).",
+        // --- RAG & Vector Search ---
+        ragInitModel: "🧠 Initializing or updating model, please wait (approx. 90MB)...",
+        ragIndexing: "⏳ Found {count} new or modified notes, building neural index...",
+        ragSyncDone: "✅ Incremental sync completed!",
+        ragSyncFailed: "❌ Failed to initialize local AI brain",
+        ragNoRefsFound: "No notes found associated with [[{targetPage}]] in the knowledge base.",
+        ragRefsFound: "Here are all the notes associated with [[{targetPage}]]:\n",
+        ragQueryError: "An error occurred while querying [[{targetPage}]]",
+        // --- Export Feature ---
+        exportNoChat: "No chat history to export!",
+        exportSuccess: "✅ Chat exported: {name}"
     }
 };
 

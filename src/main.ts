@@ -3,8 +3,11 @@ import '@logseq/libs';
 import { state, I18N } from './config';
 import { actions } from './actions';
 import { renderUI } from './ui';
+import { syncVectorDB } from './rag'; // 👈 1. 改為引入全新的增量同步函式
 
 async function main() {
+    console.log("Impeller AI 外掛已載入！");
+
     const config = await logseq.App.getUserConfigs();
     state.t = config.preferredLanguage?.startsWith("zh") ? I18N["zh-TW"] : I18N["en"];
 
@@ -54,11 +57,28 @@ async function main() {
         template: `<a class="button" data-on-click="togglePortal" style="font-size: 13px; font-weight: 600; padding: 0 8px; color: var(--ls-icon-color); opacity: 0.8;">${state.t.aiBtnText}</a>`
     });
 
+    // 💡 新增：註冊匯出對話指令到 Logseq 快捷面板 (Command Palette)
+    logseq.App.registerCommandPalette({
+        key: 'export-ai-chat',
+        label: 'Impeller AI: 匯出當前對話 (Export Chat)',
+    }, async () => {
+        actions.exportChat();
+    });
+
     logseq.App.onRouteChanged(async () => {
         if (state.isVisible) {
             await actions.updatePageContext();
             renderUI();
         }
+    });
+
+    // 👈 2. 啟動時執行一次增量同步
+    syncVectorDB().catch(err => console.error("向量資料庫同步失敗:", err));
+
+    // 👈 3. 監聽跨圖譜 (Graph) 切換事件，切換時自動重新載入該圖譜的專屬向量庫！
+    logseq.App.onCurrentGraphChanged(() => {
+        console.log("🔄 偵測到圖譜切換，正在重新載入專屬向量資料庫...");
+        syncVectorDB().catch(console.error);
     });
 }
 

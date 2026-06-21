@@ -2,6 +2,7 @@
 import '@logseq/libs';
 import { state } from './config';
 import { actions } from './actions';
+import { searchSimilarBlocks } from './rag';
 
 export function renderUI() {
     if (!state.isVisible) {
@@ -55,7 +56,6 @@ const template = `
         .ai-stop-btn { background: #e74c3c !important; color: white !important; border: none !important; opacity: 0.9 !important; }
         .ai-stop-btn:hover { background: #c0392b !important; opacity: 1 !important; }
 
-        /* 👇 新增的對話泡泡與複製按鈕樣式 👇 */
         .msg-wrapper { position: relative; }
         .ai-copy-btn {
             position: absolute;
@@ -65,15 +65,13 @@ const template = `
             border: 1px solid var(--ls-border-color);
             border-radius: 4px;
             cursor: pointer;
-            opacity: 0; /* 預設隱藏 */
+            opacity: 0; 
             font-size: 11px;
             padding: 2px 4px;
             transition: opacity 0.2s;
             color: var(--ls-primary-text-color);
         }
-        /* 滑鼠移到泡泡上時顯示按鈕 */
         .msg-wrapper:hover .ai-copy-btn { opacity: 0.7; }
-        /* 滑鼠移到按鈕本身時加深 */
         .ai-copy-btn:hover { opacity: 1 !important; background: var(--ls-secondary-background-color); }
     </style>
     <div id="ai-sidebar-container" class="sidebar-item" style="margin: 8px; border: 1px solid var(--ls-border-color); background: var(--ls-primary-background-color); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;">
@@ -108,12 +106,13 @@ const template = `
     <div style="padding: 12px; background: var(--ls-secondary-background-color); border-top: 1px solid var(--ls-border-color);">
         <textarea id="ai-sidebar-textarea" rows="2" placeholder="${state.t.placeholder}" style="width: 100%; background: var(--ls-primary-background-color); color: var(--ls-primary-text-color); border: 1px solid var(--ls-border-color); border-radius: 6px; padding: 10px; font-size: 13px; resize: none; outline: none; margin-bottom: 8px; box-sizing: border-box;" ${isBusy ? 'disabled' : ''}></textarea>
         
-        <div style="display: flex; gap: 6px;">
-            <button data-on-click="clearChat" class="ai-btn-action" style="flex: 0.35; opacity: 0.7; border: 1px solid var(--ls-border-color); border-radius: 6px;" ${isBusy ? 'disabled' : ''}>🧹Clear</button>
-            <button data-on-click="formatPage" class="ai-btn-action" style="flex: 0.4; font-weight: bold; opacity: 0.85; border: 1px solid var(--ls-border-color); border-radius: 6px;" ${isBusy ? 'disabled' : ''}>✒️Format</button>
+        <div style="display: flex; gap: 4px;">
+            <button data-on-click="clearChat" class="ai-btn-action" style="flex: 1; padding: 6px 2px; opacity: 0.7; border: 1px solid var(--ls-border-color); border-radius: 6px;" ${isBusy ? 'disabled' : ''}>🧹Clear</button>
+            <button data-on-click="exportChat" class="ai-btn-action" style="flex: 1; padding: 6px 2px; opacity: 0.7; border: 1px solid var(--ls-border-color); border-radius: 6px;" ${isBusy ? 'disabled' : ''}>📥Export</button>
+            <button data-on-click="formatPage" class="ai-btn-action" style="flex: 1; padding: 6px 2px; font-weight: bold; opacity: 0.85; border: 1px solid var(--ls-border-color); border-radius: 6px;" ${isBusy ? 'disabled' : ''}>✒️Format</button>
             ${isBusy 
-                ? `<button data-on-click="stopTask" class="ai-btn-action ai-stop-btn" style="flex: 0.25; border-radius: 6px;">■</button>` 
-                : `<button data-on-click="sendMsg" class="ai-btn-action" style="flex: 0.25; background: var(--ls-quaternary-background-color); border: 1px solid var(--ls-border-color); border-radius: 6px; opacity: 0.9;">➤</button>`
+                ? `<button data-on-click="stopTask" class="ai-btn-action ai-stop-btn" style="flex: 0.6; border-radius: 6px;">■</button>` 
+                : `<button data-on-click="sendMsg" class="ai-btn-action" style="flex: 0.6; background: var(--ls-quaternary-background-color); border: 1px solid var(--ls-border-color); border-radius: 6px; opacity: 0.9;">➤</button>`
             }
         </div>
     </div>
@@ -132,19 +131,14 @@ const template = `
                 if (["ArrowUp", "ArrowDown", "Enter"].includes(e.key)) {
                     e.stopPropagation();
                 }
-                // 檢查是否為 Enter
                 if (e.key === "Enter") {
                     if (e.shiftKey) {
-                        // 💡 強制攔截：Shift+Enter
-                        // 讓瀏覽器執行預設的換行行為，但確保它不要冒泡，不影響 Logseq 核心行為
-                        // 這裡不需要 preventDefault，因為我們想要它換行
                         e.stopPropagation();
                         return;
                     } else {
-                        // 💡 純 Enter：執行你的傳送邏輯
                         if (!isBusy) {
                             e.preventDefault();
-                            e.stopPropagation(); // 徹底阻斷冒泡
+                            e.stopPropagation(); 
                             actions.sendMsg();
                         }
                     }

@@ -3,10 +3,11 @@ import '@logseq/libs';
 import { state } from './config';
 import { startBusyFeedback, stopBusyFeedback, writeToLogseq } from './engine';
 import { renderUI } from './ui';
-// 💡 1. 這裡匯入剛剛做好的 tools.ts
-import { executeWebSearch } from './tools';
 import { buildSystemPrompt } from './prompts';
 import { MemoryManager } from './memory';
+
+// 💡 1. 改為匯入全新的工具註冊與分派中心
+import { getAvailableTools, executeToolCall } from './tools';
 
 export const actions = {
     async updatePageContext() {
@@ -54,6 +55,7 @@ export const actions = {
             state.currentPageUuid = null;
         }
     },
+
     async togglePortal() {
         state.isVisible = !state.isVisible;
         if (state.isVisible) {
@@ -86,7 +88,6 @@ export const actions = {
         if (state.abortController) state.abortController.abort();
     },
 
-    // 💡 2. 這裡原本是單向請求，現在改成了可以處理 Tool Calling 的迴圈
     async callAI(messages: any[], useNotification = false) {
         state.isBusy = true;
         state.abortController = new AbortController();
@@ -97,25 +98,10 @@ export const actions = {
         const maxIterations = 3;
 
         try {
-            const { apiKey, model, basePath, webApiKey } = logseq.settings!;
+            const { apiKey, model, basePath } = logseq.settings!;
 
-            // 定義要告訴 AI 的技能清單 (有填金鑰才會送出)
-            const tools = webApiKey ? [
-                {
-                    type: "function",
-                    function: {
-                        name: "web_search",
-                        description: "MUST use this tool for ANY queries about current events, recent news, real-time data, dates, or if your internal knowledge might be outdated. Do not answer from memory for current facts.",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                query: { type: "string", description: "The search query or keywords." }
-                            },
-                            required: ["query"]
-                        }
-                    }
-                }
-            ] : undefined;
+            // 💡 2. 移除寫死的工具清單，改用模組化的註冊中心
+            const tools = getAvailableTools();
 
             while (iterations < maxIterations) {
                 const requestBody: any = { model, messages: currentMessages };
@@ -129,7 +115,12 @@ export const actions = {
 
                 const response = await fetch(`${basePath}/chat/completions`, {
                     method: "POST",
-                    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://github.com/hhs456/logseq-impeller-ai", // 填寫 GitHub 項目網址或本地 localhost
+                        "X-Title": "Impeller AI: Universal LLM Sidebar", // 填寫在 OpenRouter 後台顯示的 App 名稱
+                    },
                     body: JSON.stringify(requestBody),
                     signal: state.abortController.signal
                 });
@@ -148,30 +139,30 @@ export const actions = {
                     currentMessages.push(message);
 
                     for (const toolCall of message.tool_calls) {
-                        if (toolCall.function.name === 'web_search') {
-                            try {
-                                const args = JSON.parse(toolCall.function.arguments);
-                                const searchResult = await executeWebSearch(args.query);
+                        try {
+                            const args = JSON.parse(toolCall.function.arguments);
 
-                                currentMessages.push({
-                                    role: "tool",
-                                    tool_call_id: toolCall.id,
-                                    name: toolCall.function.name,
-                                    content: searchResult
-                                });
-                                renderUI(); // 工具執行完可以刷一下 UI（或你有自己的 busy 回饋）
-                            } catch (err) {
-                                currentMessages.push({
-                                    role: "tool",
-                                    tool_call_id: toolCall.id,
-                                    name: toolCall.function.name,
-                                    content: JSON.stringify({ error: "搜尋執行失敗或參數解析錯誤" })
-                                });
-                            }
+                            // 💡 3. 一行程式碼！動態分發任何工具 (web_search, semantic_search, graph_tag_search)
+                            const toolResultString = await executeToolCall(toolCall.function.name, args);
+
+                            currentMessages.push({
+                                role: "tool",
+                                tool_call_id: toolCall.id,
+                                name: toolCall.function.name,
+                                content: toolResultString
+                            });
+                            renderUI(); // 工具執行完可以刷一下 UI
+                        } catch (err) {
+                            currentMessages.push({
+                                role: "tool",
+                                tool_call_id: toolCall.id,
+                                name: toolCall.function.name,
+                                content: JSON.stringify({ error: "工具執行失敗或參數解析錯誤" })
+                            });
                         }
                     }
                     iterations++;
-                    continue;
+                    continue; // 跑完工具後，繼續下一個迴圈讓 AI 判斷是否還有需要查的
                 }
 
                 return message.content;
@@ -183,36 +174,32 @@ export const actions = {
             if (e.name === 'AbortError') {
                 console.log("偵測到使用者終止任務，正在保留目前的工具執行與對話歷程...");
 
-                // 🎯 2. 此時 catch 已經可以完美存取 currentMessages
                 let abortSummary = "";
 
                 for (const m of currentMessages) {
+                    // 💡 4. 讓中止歷程也能動態顯示不同的工具名稱與關鍵字
                     if (m.role === 'assistant' && m.tool_calls) {
                         for (const tc of m.tool_calls) {
-                            if (tc.function?.name === 'web_search') {
-                                try {
-                                    const q = JSON.parse(tc.function.arguments).query;
-                                    abortSummary += `🔍 *[系統] 觸發網路搜尋： "${q}"...*\n`;
-                                } catch {
-                                    abortSummary += `🔍 *[系統] 觸發網路搜尋...*\n`;
-                                }
+                            try {
+                                const args = JSON.parse(tc.function.arguments);
+                                const q = args.query || args.target_page || "執行中";
+                                abortSummary += `🛠️ *[系統] 觸發工具 (${tc.function.name})： "${q}"...*\n`;
+                            } catch {
+                                abortSummary += `🛠️ *[系統] 觸發工具 (${tc.function.name})...*\n`;
                             }
                         }
                     }
                     if (m.role === 'tool') {
-                        abortSummary += `✅ *[系統] 搜尋完成，已取得參考資料。*\n`;
+                        abortSummary += `✅ *[系統] 工具執行完成，已取得資料。*\n`;
                     }
                 }
 
-                // 串上終止提示
                 abortSummary += `\n🛑 **[對話已被使用者終止]**`;
 
-                // 🎯 3. 安全鎖：如果是 Format 頁面 (有填 processingPageUuid) 則不污染對話歷史
                 if (!state.processingPageUuid && state.currentPageUuid) {
                     const currentData = state.chatStore[state.currentPageUuid];
                     if (currentData) {
                         currentData.msgs.push({ role: "assistant", content: abortSummary });
-                        // 如果你在 actions.ts 裡有 saveChatStore()，就在這裡存檔
                         if (typeof (this as any).saveChatStore === 'function') {
                             (this as any).saveChatStore();
                         }
@@ -220,7 +207,7 @@ export const actions = {
                 }
 
                 logseq.UI.showMsg(state.t.aborted, 'warning');
-                return abortSummary; // 回傳這段軌跡，讓對話框渲染出來
+                return abortSummary;
             } else {
                 logseq.UI.showMsg(state.t.error + e.message, 'error');
                 return null;
@@ -240,10 +227,11 @@ export const actions = {
         const targetUuid = state.currentPageUuid;
         state.processingPageUuid = targetUuid;
 
+        const userQuery = state.tempInput;
+
         state.chatStore[targetUuid].msgs.push({ role: "user", content: state.tempInput });
         state.tempInput = "";
 
-        // ✨ 新增：在發送前自動壓縮過長的記憶
         await MemoryManager.compressIfNeeded(targetUuid, this.callAI.bind(this));
 
         const blocks = await logseq.Editor.getPageBlocksTree(targetUuid);
@@ -251,9 +239,11 @@ export const actions = {
 
         const system = buildSystemPrompt({ langName: state.t.langName, isWritingToPage: false });
         const pageName = state.chatStore[targetUuid]?.name || "Unknown Page";
+
+        // 💡 5. 移除這裡寫死的 RAG 向量搜尋。現在我們只給 AI 當前頁面內容，
+        // 如果 AI 覺得資訊不夠，它會「自己」呼叫工具去全域搜尋！
         const promptWithContext = `${system}\n\n【Page Name】: ${pageName}\n\n【Page Content】:\n${getTxt(blocks)}`;
 
-        // ✨ 新增：只抓取最新的歷史記錄，防止 Context Overflow
         const recentHistory = MemoryManager.getRecentHistory(targetUuid);
 
         const res = await this.callAI([
@@ -282,14 +272,11 @@ export const actions = {
 
         if (msg && msg.content) {
             try {
-                // 🎯 關鍵修復 1：加上 parent，直接呼叫 Logseq 主視窗的剪貼簿 API
                 await window.parent.navigator.clipboard.writeText(msg.content);
                 logseq.UI.showMsg('✅ 已複製對話內容', 'success');
             } catch (err) {
-                // 🎯 關鍵修復 2：降級方案也要把 textarea 塞進 parent.document 裡
                 const textArea = window.parent.document.createElement("textarea");
                 textArea.value = msg.content;
-
                 textArea.style.position = "fixed";
                 textArea.style.opacity = "0";
 
@@ -314,63 +301,52 @@ export const actions = {
             }
         }
     },
+
     async deleteMsg(e: any) {
         const msgIndex = parseInt(e.dataset.index, 10);
         const pageUuid = state.currentPageUuid;
 
         if (!pageUuid || !state.chatStore[pageUuid]) return;
 
-        // 確認刪除邏輯：刪除該索引及之後所有的對話
-        // 這樣能保證對話上下文的連續性，避免 AI 對著不存在的對話回應
         state.chatStore[pageUuid].msgs = state.chatStore[pageUuid].msgs.slice(0, msgIndex);
-
         logseq.UI.showMsg('🗑️ 已刪除該訊息及後續對話', 'info');
         renderUI();
     },
-async regenerateMsg(e: any) {
+
+    async regenerateMsg(e: any) {
         const msgIndex = parseInt(e.dataset.index, 10);
         const pageUuid = state.currentPageUuid;
         if (!pageUuid || state.isBusy) return;
 
-        // 🎯 關鍵修復：補上這一行！告訴全域目前正在為哪一個頁面後台構思，UI 才能正確顯示「正在為 XXX 構思」
         state.processingPageUuid = pageUuid;
-
         const msgs = state.chatStore[pageUuid].msgs;
-        
-        // 1. 取得該 AI 回應對應的 User Prompt (索引在 msgIndex - 1)
+
         const userPrompt = msgs[msgIndex - 1]?.content;
         if (!userPrompt) {
-            state.processingPageUuid = null; // 安全鎖：防呆重設
+            state.processingPageUuid = null;
             return;
         }
 
-        // 將「原本的舊 AI 回應」及之後的內容暫時抽出來備份
         const originalBackup = msgs.slice(msgIndex);
-
-        // 2. 讓全域歷史暫時只保留到 User Prompt 這一步，並以此發送給 AI
         state.chatStore[pageUuid].msgs = msgs.slice(0, msgIndex);
-        
-        // 重新組合 PromptWithContext
+
         const blocks = await logseq.Editor.getPageBlocksTree(pageUuid);
         const getTxt = (tree: any[]): string => tree.reduce((acc, b) => acc + b.content + '\n' + (b.children ? getTxt(b.children) : ''), '');
-        
+
         const promptWithContext = `${buildSystemPrompt({ langName: state.t.langName, isWritingToPage: false })}\n\n【Page Name】: ${state.chatStore[pageUuid].name}\n\n【Content】:\n${getTxt(blocks)}`;
-        
+
         let success = false;
 
         try {
-            // 3. 執行呼叫
             const res = await this.callAI([
-                { role: "system", content: promptWithContext }, 
+                { role: "system", content: promptWithContext },
                 ...state.chatStore[pageUuid].msgs
             ], true);
 
-            // 4. 如果成功拿到新回應，覆蓋全域並標記成功
             if (res) {
                 state.chatStore[pageUuid].msgs.push({ role: "assistant", content: res });
                 success = true;
 
-                // 如果完成時使用者已經切換到其他頁面，跳出成功通知
                 if (state.currentPageUuid !== pageUuid) {
                     const finishedPageName = state.chatStore[pageUuid]?.name || state.t.bgPage;
                     logseq.UI.showMsg(state.t.bgChatDone.replace('{name}', finishedPageName), 'success');
@@ -379,31 +355,25 @@ async regenerateMsg(e: any) {
         } catch (err) {
             console.error("重新生成失敗:", err);
         } finally {
-            // 5. 判斷是否需要還原舊內容
             if (!success) {
-                // 如果被中止或失敗了，移除 callAI 塞進去的中止訊息
                 state.chatStore[pageUuid].msgs = state.chatStore[pageUuid].msgs.slice(0, msgIndex);
-                
-                // 把原本完全沒被污染、沒被修改的舊內容原封不動插回去
                 state.chatStore[pageUuid].msgs.push(...originalBackup);
             }
-            // 註：state.processingPageUuid 會在 callAI 的 finally 區塊被自動清空，這裡不需重複手動重設
             renderUI();
         }
     },
-async formatPage() {
+
+    async formatPage() {
         if (state.isBusy || !state.currentPageUuid) return;
 
         const targetUuid = state.currentPageUuid;
         state.processingPageUuid = targetUuid;
         const chatHistory = state.chatStore[targetUuid]?.msgs || [];
 
-        // 取得頁面內容
         const blocks = await logseq.Editor.getPageBlocksTree(targetUuid);
         const getTxt = (tree: any[]): string => tree.reduce((acc, b) => acc + b.content + '\n' + (b.children ? getTxt(b.children) : ''), '');
         const originalContent = getTxt(blocks);
 
-        // 🛡️ 防呆機制：全空不處理
         if (!originalContent.trim()) {
             logseq.UI.showMsg("頁面目前沒有內容可以排版喔！", 'warning');
             state.processingPageUuid = null;
@@ -412,26 +382,22 @@ async formatPage() {
 
         let instruction = chatHistory.length === 0 ? state.t.applyReformat : state.t.applyContext;
 
-        // 💡 這裡會自動套用在 prompts.ts 寫好的「縮排」與「雙向連結」規則
         const system = buildSystemPrompt({
             langName: state.t.langName,
-            isWritingToPage: true, 
+            isWritingToPage: true,
             baseCondition: state.t.baseCondition,
             instruction: instruction
         });
 
         const pageName = state.chatStore[targetUuid]?.name || "Unknown Page";
-        
-        // 🛡️ 套用記憶管理
         const recentHistory = MemoryManager.getRecentHistory(targetUuid);
 
-        // 送出請求
         const res = await this.callAI([
             { role: "system", content: system },
             ...recentHistory,
-            { 
-                role: "user", 
-                content: `【Page Name】: ${pageName}\n\n【Original Page Content】:\n${originalContent}\n\n===\nExecute mission based on the context above and output the formatted results now.` 
+            {
+                role: "user",
+                content: `【Page Name】: ${pageName}\n\n【Original Page Content】:\n${originalContent}\n\n===\nExecute mission based on the context above and output the formatted results now.`
             }
         ], true);
 
@@ -440,5 +406,33 @@ async formatPage() {
             await writeToLogseq(res, targetUuid);
             logseq.UI.showMsg(state.t.done, 'success');
         }
-    }
+    },
+    
+    async exportChat() {
+        const targetUuid = state.currentPageUuid;
+        if (!targetUuid || !state.chatStore[targetUuid] || state.chatStore[targetUuid].msgs.length === 0) {
+            // 💡 1. 替換為 i18n 變數
+            logseq.UI.showMsg(state.t.exportNoChat || "目前沒有對話可以匯出喔！", 'warning');
+            return;
+        }
+
+        const chat = state.chatStore[targetUuid];
+        const markdownContent = `# AI Chat: ${chat.name}\n\n` + chat.msgs.map(m => {
+            const roleStr = m.role as string;
+            const roleName = roleStr === 'user' ? '🧑 **You**' : (roleStr === 'tool' ? '🛠️ **System**' : '🤖 **AI**');
+            return `${roleName}:\n${m.content}`;
+        }).join('\n\n---\n\n');
+
+        const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = window.parent.document.createElement('a'); 
+        a.href = url;
+        a.download = `Impeller_Chat_${chat.name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        // 💡 2. 替換為 i18n 變數，並動態載入頁面名稱
+        const successMsg = (state.t.exportSuccess || `✅ 已匯出對話：{name}`).replace('{name}', chat.name);
+        logseq.UI.showMsg(successMsg, 'success');
+    },
 };

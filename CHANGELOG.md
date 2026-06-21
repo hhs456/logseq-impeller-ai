@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-06-21
+
+### Added
+- **Autonomous Agentic Loop**: Impeller AI now autonomously manages tool execution. It dynamically decides whether to use web search, semantic search, or graph queries based on conversation context.
+- **Incremental RAG Sync**: Implemented IndexedDB-based embedding cache. Startup times are now near-instant, with background incremental updates for modified blocks only.
+- **Cross-Graph Isolation**: Vector databases are now uniquely scoped to the active Logseq graph.
+- **Export Chat**: Users can now export entire conversation histories (including system execution traces) to Markdown.
+- **Localization**: Added full i18n support for all new background processes and notifications.
+
+### Changed
+- **Architecture Refactor**: Stripped all hardcoded tool logic from `actions.ts`. The system now relies on a centralized `tools.ts` registry, following the Open-Closed Principle.
+- **Type Definitions**: Updated `ChatMessage` to support tool-calling schemas natively.
 
 ## [0.5.0] - 2026-06-09
 
