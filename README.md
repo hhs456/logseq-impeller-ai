@@ -1,6 +1,6 @@
 # 🌀 Impeller AI
 
-![Version](https://img.shields.io/badge/version-v0.6.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.7.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Logseq](https://img.shields.io/badge/Logseq-Plugin-0f172a?logo=logseq)
 
@@ -20,19 +20,24 @@ Acting as a **Universal LLM Portal**, it pumps contextual intelligence directly 
 
 ---
 
-### 🚀 Core Features
+## Core Features
 
-Impeller AI goes far beyond basic API chat wrappers by natively interweaving with the Logseq block ecosystem.
+Impeller AI deeply integrates with Logseq's block ecosystem. It is not just a chat UI, but an autonomous inference engine running directly inside your workspace:
 
-- **Autonomous Agentic Engine 🤖**: Powered by a robust reasoning loop. The AI autonomously orchestrates backend tool calls—triggering `semantic_search` across your vector brain, Datalog-driven `graph_tag_search`, or live Google/Tavily web queries—to fetch the absolute best answer based on context.
-- **Lightning-Fast Incremental RAG ⚡**: Built on top of Orama and Transformers.js, featuring persistent IndexedDB caching. Startup is immediate as it only indexes mutated blocks dynamically in the background. Full **Cross-Graph Brain Isolation** guarantees workspace data separation.
-- **Native Hierarchical Trees 🌳**: Rejects flat text walls. The AST compiler maps AI Markdown directly into Logseq's native nested tree nodes (`IBatchBlock`), keeping your workflows cleanly indented and collapsible.
-- **Sliding-Window Memory 🧠**: Managed gracefully by a smart `MemoryManager` that dynamically sliding-slices older threads and automatically condenses overflowing contexts into clean background summaries to save your API tokens.
-- **Context-Aware Formatting (✒️Format) ✨**: The layout engine dynamically alters its behavior based on layout state:
-  - **Empty Page?** Intercepts unnecessary operations to prevent wasting remote API usage.
-  - **No Active History?** Runs high-fidelity structural reformatting and style polishing over your current page.
-  - **With History?** Deeply maps the context to append or weave new intelligence precisely where it belongs.
-- **Isolated Power-User UX 🛡️**: Designed for fluent hotkey operations. Safely isolates `Enter` (Send) and `Shift+Enter` (Newline) bubble propagation to prevent conflicts with Logseq keybindings. Offers click controls for individual messages (Clipboard bypass copy/Context slicing delete/Safe rollbacked regenerate).
+### 🧠 Autonomous Agentic Engine
+* **Dynamic Tool Calling (Up to 7 Iterations)**: Powered by a robust reasoning loop (`maxIterations: 7`). The AI autonomously decides when to trigger `semantic_search` (local vector base), global keyword queries (Datalog), or `web_search`.
+* **Strict Anti-Hallucination**: System prompts force the AI to use `web_search` for current affairs and append a mandatory "Sources" citation section, strictly separating facts from inferences.
+* **Incremental RAG & IndexedDB Cache**: Built on Orama and Transformers.js (`bge-small-zh-v1.5`). Vector embeddings are persistently cached in IndexedDB (`ImpellerRAG_Cache`). Startup performs a lightning-fast background diff-sync, updating only newly modified blocks.
+
+### 🌳 Native Block & Context Processing
+* **AST-to-Nested Blocks**: Bypasses plain text limitations. An internal AST parser (`parseMarkdownToTree`) converts AI Markdown directly into Logseq's native nested parent-child blocks. It also auto-prepends a horizontal divider and custom tag (e.g., `--- \n#AI`) for visual cleanliness.
+* **Auto Bi-Directional Linking**: Prompt-level constraints instruct the AI to automatically identify core concepts and wrap them in `[[Wiki-links]]` during generation.
+* **Auto-Compression Memory**: Implements a strict token-saving mechanism. When the chat history exceeds 12 messages, a background worker automatically compresses the oldest 6 messages into a concise summary, preserving long-term context while strictly limiting the sliding window.
+
+### ✨ Polished Sidebar Workflow
+* **Smart Apply Logic**: The "Apply" command dynamically analyzes chat context. It intelligently switches between `applyReformat` (pure structural indentation fixing without adding text) and `applyContext` (appending newly generated blocks).
+* **Zero-Friction Markdown Clipboard**: Hovering over chat messages reveals precise controls (Copy, Regenerate, Delete). The copy function extracts the pre-processed `rawMarkdown` directly from the DOM dataset, preventing browser HTML pollution and preserving pure Logseq formatting.
+* **Non-Blocking & Exportable**: Supports manual task cancellation via `AbortController`. You can easily export entire chat histories (including tool execution traces) to a clean Markdown file via the Command Palette (`export-ai-chat`).
 
 ---
 

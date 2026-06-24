@@ -1,6 +1,8 @@
 // src/main.ts
 import '@logseq/libs';
 import { state, I18N } from './config';
+import { panel } from './panel';
+import { agent } from './agent';
 import { actions } from './actions';
 import { renderUI } from './ui';
 import { syncVectorDB } from './rag'; // 👈 1. 改為引入全新的增量同步函式
@@ -50,11 +52,15 @@ async function main() {
     ]);
 
     // 將所有行為綁定給 UI data-on-click 使用
-    logseq.provideModel(actions);
+    logseq.provideModel({
+        ...actions,
+        ...agent,
+        ...panel
+    });
 
     logseq.App.registerUIItem('toolbar', {
         key: 'ai-portal-btn',
-        template: `<a class="button" data-on-click="togglePortal" style="font-size: 13px; font-weight: 600; padding: 0 8px; color: var(--ls-icon-color); opacity: 0.8;">${state.t.aiBtnText}</a>`
+        template: `<a class="button" data-on-click="togglePanel" style="font-size: 13px; font-weight: 600; padding: 0 8px; color: var(--ls-icon-color); opacity: 0.8;">${state.t.aiBtnText}</a>`
     });
 
     // 💡 新增：註冊匯出對話指令到 Logseq 快捷面板 (Command Palette)
@@ -62,7 +68,7 @@ async function main() {
         key: 'export-ai-chat',
         label: 'Impeller AI: 匯出當前對話 (Export Chat)',
     }, async () => {
-        actions.exportChat();
+        panel.exportChat();
     });
 
     logseq.App.onRouteChanged(async () => {

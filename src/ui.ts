@@ -2,6 +2,8 @@
 import '@logseq/libs';
 import { state } from './config';
 import { actions } from './actions';
+import { agent } from './agent';
+import { panel } from './panel';
 import { searchSimilarBlocks } from './rag';
 
 export function renderUI() {
@@ -80,7 +82,7 @@ const template = `
                 <span style="font-size: 10px; opacity: 0.5;">${state.isCollapsed ? '▶' : '▼'}</span>
                 <span style="font-weight: 600; font-size: 0.85em; opacity: 0.8;">🤖 ${state.t.aiBtnText.toUpperCase()}</span>
             </div>
-            <a data-on-click="hidePortal" style="opacity: 0.5; padding: 4px;">✕</a>
+            <a data-on-click="hidePanel" style="opacity: 0.5; padding: 4px;">✕</a>
         </div>
         <div style="display: ${state.isCollapsed ? 'none' : 'flex'}; flex-direction: column; height: 500px;">
     <div id="ai-chat-history-scroll" style="flex: 1; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
@@ -139,7 +141,7 @@ const template = `
                         if (!isBusy) {
                             e.preventDefault();
                             e.stopPropagation(); 
-                            actions.sendMsg();
+                            agent.sendMsg();
                         }
                     }
                 }

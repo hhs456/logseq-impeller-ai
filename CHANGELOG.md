@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-06-24
+
+Added
+  - **Repository Map & Cross-File Navigation** : Introduced advanced agentic tools (`get_page_outline`, `read_target_block`, and `global_keyword_search`), empowering the AI to inspect large note hierarchies and perform full-graph Datalog Grep-like searches, entirely overcoming the context window limitations.
+  - **Robust Tool Schemas** : Standardized all backend tool descriptions and parameter fields into high-quality English JSON schemas, optimizing tool-calling efficiency and eliminating multi-language interpretation hallucinations for future local LLM extensions.
+
+Changed
+  - **God Object Decoupling** : Fully dismantled the monolithic `actions.ts` script into a clean, decoupled "Golden Triangle" architecture (`agent.ts` for reasoning loops, `panel.ts` for UI view logic, and `actions.ts` for lean Logseq controller bridge).
+  - **Event Binding Safety** : Flattened the model registration interface within `logseq.provideModel` via object spreading, completely resolving broken UI component callback context issues and implicit `this` binding leaks.
+
 ## [0.6.0] - 2026-06-21
 
 ### Added
