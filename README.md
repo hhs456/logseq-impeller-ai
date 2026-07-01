@@ -1,6 +1,6 @@
 # 🌀 Impeller AI
 
-![Version](https://img.shields.io/badge/version-v0.7.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.8.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Logseq](https://img.shields.io/badge/Logseq-Plugin-0f172a?logo=logseq)
 
@@ -14,9 +14,28 @@ Acting as a **Universal LLM Portal**, it pumps contextual intelligence directly 
 
 ### 📸 See it in Action
 
+`0.5.0`
 |<img src="./img/screenshot_format.jpg" width="400" alt="Format Page Feature">|<img src="./img/screenshot_copy.jpg" width="400" alt="Advanced Message Controls">|
 |:---:|:---:|
-| *Intelligent Native Hierarchical Formatting* | *Advanced Message Controls (Copy/Regenerate)* |
+| *Smart Hierarchical Formatting* | *Quick Chat Actions (Copy/Regenerate)* |
+
+`0.6.0`
+|<img src="./img/screenshot_rag.jpg" width="400" alt="Incremental RAG Sync">|<img src="./img/screenshot_export.jpg" width="400" alt="Export Chat Feature">|
+|:---:|:---:|
+|<img src="./img/screenshot_rag_2.jpg" width="400" alt="Incremental RAG Sync">|<img src="./img/screenshot_export_2.jpg" width="400" alt="Export Chat Feature">|
+| *Incremental RAG Sync* | *One-Click Chat Export* |
+
+`0.7.0`
+|<img src="./img/screenshot_auto_serach.jpg" width="400" alt="Agentic Call Traces">|<img src="./img/screenshot_code_review.jpg" width="400" alt="Cross-file Structure Assembly">|
+|:---:|:---:|
+| *Autonomous Web & KB Exploration* | *Graph Navigation (Precise Line-Level Targeting)* |
+
+`0.8.0`
+|<img src="./img/screenshot_md_header.jpg" width="400" alt="Markdown Headers">|<img src="./img/screenshot_md_link&list.jpg" width="400" alt="Markdown Links and Lists">|
+|:---:|:---:|
+| *Rich Rendering: Headers* | *Rich Rendering: Links & Lists* |
+|<img src="./img/screenshot_md_block&table.jpg" width="400" alt="Markdown Blockquotes & Tables">|<img src="./img/screenshot_md_code.jpg" width="400" alt="Markdown Code Blocks">|
+| *Rich Rendering: Blockquotes & Tables* | *Rich Rendering: Code Blocks (Copyable)* |
 
 ---
 
@@ -31,10 +50,11 @@ Impeller AI deeply integrates with Logseq's block ecosystem. It is not just a ch
 
 ### 🌳 Native Block & Context Processing
 * **AST-to-Nested Blocks**: Bypasses plain text limitations. An internal AST parser (`parseMarkdownToTree`) converts AI Markdown directly into Logseq's native nested parent-child blocks. It also auto-prepends a horizontal divider and custom tag (e.g., `--- \n#AI`) for visual cleanliness.
-* **Auto Bi-Directional Linking**: Prompt-level constraints instruct the AI to automatically identify core concepts and wrap them in `[[Wiki-links]]` during generation.
+* **Auto Bi-Directional Linking**: Prompt-level constraints instruct the AI to automatically identify core concepts and wrap them in `<span class="logseq-page-ref">Wiki-links</span>` during generation.
 * **Auto-Compression Memory**: Implements a strict token-saving mechanism. When the chat history exceeds 12 messages, a background worker automatically compresses the oldest 6 messages into a concise summary, preserving long-term context while strictly limiting the sliding window.
 
 ### ✨ Polished Sidebar Workflow
+* **Rich Markdown Rendering (New in v0.8.0!)**: A massive typography and UX leap! The sidebar chat now features full native Markdown rendering out of the box. Output effortlessly displays layered **Headers**, precise **Links**, native **Lists**, elegant **Blockquotes**, complex **Tables**, and syntax-highlighted **Code** blocks—granting you highly readable, structured visual previews before you apply them to your graph.
 * **Smart Apply Logic**: The "Apply" command dynamically analyzes chat context. It intelligently switches between `applyReformat` (pure structural indentation fixing without adding text) and `applyContext` (appending newly generated blocks).
 * **Zero-Friction Markdown Clipboard**: Hovering over chat messages reveals precise controls (Copy, Regenerate, Delete). The copy function extracts the pre-processed `rawMarkdown` directly from the DOM dataset, preventing browser HTML pollution and preserving pure Logseq formatting.
 * **Non-Blocking & Exportable**: Supports manual task cancellation via `AbortController`. You can easily export entire chat histories (including tool execution traces) to a clean Markdown file via the Command Palette (`export-ai-chat`).

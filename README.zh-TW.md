@@ -1,6 +1,6 @@
 # 🌀 Impeller AI
 
-![Version](https://img.shields.io/badge/version-v0.6.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.8.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Logseq](https://img.shields.io/badge/Logseq-Plugin-0f172a?logo=logseq)
 
@@ -8,103 +8,120 @@
 
 ---
 
-**Impeller AI** 是專為你的 Logseq 知識圖譜打造的高效能自主 AI 引擎。它與 **Logseq 右側邊欄 (Right Sidebar)** 深度整合，提供一個自然、快速且強大的 AI-人類協作工作區。
+**Impeller AI** 是一個專為您的 Logseq 圖譜量身打造的高效能自主 AI 引擎。它與 **Logseq 右側邊欄**進行了深度的類型安全（type-safe）整合，為您提供一個自然、極速且強大的 AI 人機協作工作區。
 
-由 **TinkerPump (Hanson)** 精心打造，它作為一個 **通用 LLM 入口面板**，在嚴格遵循並尊重你知識圖譜原生結構的前提下，為你的筆記源源不絕地泵入智慧。
+作為一個**通用 LLM 入口**，它能將具備上下文感知的智慧內容直接注入您的節點大綱（Outlines）中，同時嚴格遵守您圖譜的原生結構。
 
 ### 📸 功能預覽
 
+`0.5.0`
 |<img src="./img/screenshot_format.jpg" width="400" alt="Format Page Feature">|<img src="./img/screenshot_copy.jpg" width="400" alt="Advanced Message Controls">|
 |:---:|:---:|
-| *智慧原生階層格式化* | *進階對話控制 (複製/重新生成)* |
+| *智慧階層格式化* | *對話快捷操作 (複製/重生成)* |
+
+`0.6.0`
+|<img src="./img/screenshot_rag.jpg" width="400" alt="Incremental RAG Sync">|<img src="./img/screenshot_export.jpg" width="400" alt="Export Chat Feature">|
+|:---:|:---:|
+|<img src="./img/screenshot_rag_2.jpg" width="400" alt="Incremental RAG Sync">|<img src="./img/screenshot_export_2.jpg" width="400" alt="Export Chat Feature">|
+| *增量 RAG 同步* | *一鍵匯出對話紀錄* |
+
+`0.7.0`
+|<img src="./img/screenshot_auto_serach.jpg" width="400" alt="Agentic Call Traces">|<img src="./img/screenshot_code_review.jpg" width="400" alt="Cross-file Structure Assembly">|
+|:---:|:---:|
+| *自主網頁與知識庫探索* | *圖譜跨檔案導航 (精準定位至行)* |
+
+`0.8.0`
+|<img src="./img/screenshot_md_header.jpg" width="400" alt="Markdown Headers">|<img src="./img/screenshot_md_link&list.jpg" width="400" alt="Markdown Links and Lists">|
+|:---:|:---:|
+| *進階渲染：標題* | *進階渲染：連結與列表* |
+|<img src="./img/screenshot_md_block&table.jpg" width="400" alt="Markdown Blockquotes & Tables">|<img src="./img/screenshot_md_code.jpg" width="400" alt="Markdown Code Blocks">|
+| *進階渲染：引用與表格* | *進階渲染：程式碼 (支援複製)* |
 
 ---
 
 ## 核心功能
 
-Impeller AI 深度整合 Logseq 底層架構，它不僅是一個對話側邊欄，而是真正在你工作區內運作的自動化代理引擎：
+Impeller AI 深度整合了 Logseq 的區塊（Block）生態系統。它不僅僅是一個聊天介面，而是直接在您的工作區內部運行的自主推論引擎：
 
-### 🧠 自動化代理與檢索 (Agentic Engine)
-* **動態工具調用 (最高 7 次迭代)**：內建強大的推理迴圈。AI 會根據上下文，自主決定觸發 `semantic_search` (本地向量庫)、全域關鍵字查詢 (Datalog)，或是 `web_search` (網路搜尋)。
-* **嚴格防幻覺機制**：System Prompt 強制要求 AI 在面對時事或未知數據時，必須呼叫網路搜尋，並在文末嚴格附上「參考來源 (Sources)」，將事實與推理分開。
-* **增量 RAG 與 IndexedDB 快取**：底層結合 Orama 與 Transformers.js。向量特徵值會持久化儲存於 IndexedDB (`ImpellerRAG_Cache`) 中。系統啟動時僅針對「已修改的區塊」進行背景差異同步，實現極速啟動。
+### 🧠 自主代理引擎 (Autonomous Agentic Engine)
+* **動態工具呼叫（最高 7 次迭代）**：由強大的推理迴圈驅動（`maxIterations: 7`）。AI 可自主決定何時觸發 `semantic_search`（本地向量庫檢索）、全域關鍵字查詢（Datalog）或 `web_search`（網路搜尋）。
+* **嚴格防幻覺機制**：系統提示詞會強制 AI 在處理時事時使用 `web_search`，並強制附加「參考來源 (Sources)」區塊，嚴格區分客觀事實與 AI 推論。
+* **增量 RAG 與 IndexedDB 快取**：基於 Orama 與 Transformers.js（`bge-small-zh-v1.5` 嵌入模型）建構。向量資料（Embeddings）會持久化快取於 IndexedDB（`ImpellerRAG_Cache`）中。啟動時會在背景執行極速的差異同步，僅針對近期修改過的區塊進行更新。
 
 ### 🌳 原生區塊與上下文處理
-* **AST 巢狀區塊寫入**：內建 AST 解析器 (`parseMarkdownToTree`)，將 AI 產出的 Markdown 精準映射為 Logseq 原生的父子巢狀區塊。插入時會自動加上水平分割線與自訂標籤 (例如：`--- \n#AI`) 以保持版面整潔。
-* **自動雙向連結感知**：透過 Prompt 約束，AI 在生成內容時會自動識別核心概念與專有名詞，並主動包覆 `[[雙向連結]]`，無縫融入你的圖譜。
-* **記憶體自動壓縮**：嚴格的 Token 控管機制。當歷史訊息超過 12 筆，系統會在背景自動將最舊的 6 筆對話壓縮成「精華摘要」，在保留長期脈絡的同時，完美控制 API 成本。
+* **AST 轉巢狀區塊**：突破純文字限制。內部的 AST 解析器（`parseMarkdownToTree`）能將 AI 生成的 Markdown 直接轉換為 Logseq 原生的巢狀父子區塊。它還會自動在區塊前加上水平分隔線與自訂標籤（例如 `--- \n#AI`）以保持層級視覺的整潔。
+* **自動雙向連結**：提示詞層級的約束會指示 AI 在生成內容時，自動識別圖譜中的核心概念，並將其包裹在 `<span class="logseq-page-ref">Wiki-links (雙向連結)</span>` 中。
+* **自動壓縮記憶體**：實作了嚴格的 Token 節約機制。當聊天紀錄超過 12 則訊息時，背景工作執行緒會自動將最舊的 6 則訊息壓縮為簡明的總結摘要，在嚴格限制滑動視窗的同時保留長期的上下文脈絡。
 
-### ✨ 流暢的側邊欄工作流
-* **智慧套用邏輯 (Smart Apply)**：「✨ 套用」按鈕會動態分析對話狀態。自動判斷是要執行 `applyReformat` (純重構：僅修復縮排不新增資訊)，還是 `applyContext` (智慧執行：附加新產出的區塊)。
-* **無損 Markdown 剪貼簿**：懸停對話即可觸發控制選單 (複製、重新生成、刪除)。複製功能會直接抓取預處理好的 `rawMarkdown`，繞過瀏覽器 DOM 渲染污染，確保貼上時保有最純淨的 Logseq 縮排格式。
-* **非同步執行與匯出**：支援 `AbortController` 隨時急停任務。並註冊了快捷指令 (`export-ai-chat`)，支援將包含工具執行軌跡的完整對話，一鍵匯出為 Markdown 檔案。
+### ✨ 精緻的側邊欄工作流
+* **豐富的 Markdown 渲染 ✨（v0.8.0 全新功能！）**：排版與使用者體驗的巨大飛躍！側邊欄聊天現在開箱即支援完整的原生 Markdown 渲染。輸出內容能輕鬆呈現層次分明的**標題**、精確的**連結**、原生的**列表**、優雅的**引用區塊**、複雜的**表格**以及具備語法突顯的**程式碼區塊**——讓您在將內容應用至圖譜前，就能獲得高可讀性且結構化的視覺預覽。
+* **智慧應用 (Apply) 邏輯**：「應用」指令會動態分析聊天上下文。它能智慧地在 `applyReformat`（純粹修復結構縮排而不新增文字）和 `applyContext`（附加新生成的區塊）兩種模式之間靈活切換。
+* **零摩擦 Markdown 剪貼簿**：將游標懸停在聊天訊息上即可顯示精確的控制項（複製、重新生成、刪除）。複製功能會直接從 DOM dataset 提取預處理過的 `rawMarkdown`，防止瀏覽器 HTML 污染並完美保留純粹的 Logseq 格式。
+* **非阻塞與可匯出**：支援透過 `AbortController` 手動取消生成任務。您可以輕鬆地透過命令面板（`export-ai-chat`）將整個聊天紀錄（包含深度的工具執行軌跡）匯出為乾淨的 Markdown 檔案。
 
 ---
 
-### 📥 安裝方式 (解壓縮外掛)
+### 📥 安裝說明 (未打包的外掛)
 
-目前 Impeller AI 處於活躍開發階段，你可以透過以下簡單步驟手動安裝：
-
-1. 下載此 GitHub 儲存庫（點選右上角 `Code` -> `Download ZIP`）並解壓縮至電腦中安全的資料夾。
-2. 開啟 Logseq，點擊右上角三點選單 `...` 並進入 **Settings (設定)**。
-3. 前往 **Advanced (進階)** 分頁，將 **Developer mode (開發者模式)** 切換為開啟。
-4. 關閉設定，再次點擊 `...` 選單，這次選擇 **Plugins (外掛)**。
-5. 點擊 **Load unpacked plugin (載入解壓縮外掛)** 按鈕，並選擇你剛剛解壓縮的 `logseq-impeller-ai` 資料夾。
-6. 外掛已成功啟動！
+1. 下載此儲存庫（點擊 GitHub 上的 `Code` -> `Download ZIP`）並將資料夾解壓縮到您電腦上的安全位置。
+2. 開啟 Logseq。點擊右上角的三點選單 `...` 並選擇 **設定 (Settings)**。
+3. 前往 **進階 (Advanced)** 標籤頁並開啟 **開發者模式 (Developer mode)**。
+4. 關閉設定，再次點擊三點選單 `...`，並選擇 **外掛 (Plugins)**。
+5. 點擊 **載入未打包的外掛 (Load unpacked plugin)** 按鈕，然後選擇剛剛解壓縮的 `logseq-impeller-ai` 資料夾。
+6. 外掛現在已成功啟用！
 
 ---
 
 ### 📦 使用指南
 
-Impeller UI 常駐於你的 **右側邊欄**，伴隨你漫遊在不同的筆記頁面中。
+Impeller UI 常駐於您的 **右側邊欄** 中，作為您跨頁面持續存在的創意夥伴。
 
-- **啟動大腦**: 點擊工具列上的 **AI Assistant** 按鈕，即可自由切換側邊欄的顯示。
-- **對話發想**: 在底部輸入框中輸入你的需求。按 **Enter** 傳送，或按 **Shift+Enter** 換行。
-- **對話節點控制**: 將滑鼠移至任何對話泡泡上，即可 reveal 進階動作：
-  - **📋 複製**: 立即複製 AI 回應（完美繞過 Logseq 核心 iframe 的剪貼簿沙盒限制）。
-  - **⏹️ 刪除**: 移除此筆使用者 prompt 並自動截斷其後的歷史，維持情境連續性。
-  - **🔄 重新生成**: 強制 AI 對該節點重新思考，並附帶生成失敗時的安全自動回滾機制。
-- **底部操作按鈕**:
-  - **✒️ Format**: 根據對話情境或複雜指令，重新編織或優化當前頁面。
-  - **🧹 Clear**: 徹底抹除當前頁面的 AI 對話歷史，開啟全新主題。
-  - **■ Stop**: 在生成途中隨時踩煞車，中斷請求並優雅保留已輸出的殘跡與工具日誌。
-  - **📥 Export**: 一鍵將當前對話（包含工具調用日誌）匯出為獨立的結構化 Markdown 檔案。亦可透過指令面板（`Ctrl+Shift+P` -> `Export Chat`）觸發。
-
----
-
-### 🛠️ 組態設定
-
-你可以在 Logseq 的外掛設定面板中調整以下參數：
-
-- **API Key**: 你的大語言模型 Secret Key。
-- **Model**: 你偏好的模型 ID (預設為 `openai/gpt-4o-mini`，支援任何相容 OpenAI 格式的模型)。
-- **API Endpoint (Base Path)**：自訂反向代理或路由端點。極度適合搭配 OpenRouter、自建代理，或串接本機端 LLM（如 Ollama / LM Studio）。
-- **Web Search API Key**: *(選填)* 填入你的 Tavily API Key，即可解除封印 AI 的實體聯網搜尋與事實查核能力。
-- **Custom Tag**: 定義 AI 格式化結果放置的標頭標籤（例如 `#AI`）。Impeller 會自動在標籤上方 prepend 一條乾淨的 `---` 分隔線以呈現優美的區塊視覺。
-- **智慧索引效能說明**: 首次在圖譜上啟用 AI時，系統會在背景進行一次完整的索引同步；後續的所有操作都將透過本地差異快取實現近乎零等待的極速體驗。
+- **開關側邊欄**：點擊上方工具列中的 **AI Assistant** 圖示以顯示或隱藏面板。
+- **對話互動**：在輸入框輸入您的指令。按下 `Enter` 送出，或使用 `Shift+Enter` 換行。
+- **訊息節點操作**：將鼠標懸停在任何回應氣泡上，可顯示節點控制項：
+  - **📋 複製 (Copy)**：即時截取回應內容（繞過 iframe 沙盒邊界限制）。
+  - **⏹️ 刪除 (Delete)**：銷毀該提示節點並安全地切斷後續的上下文，以維持對話的連貫性。
+  - **🔄 重新生成 (Regenerate)**：強制重新評估該節點步驟，並具備自動化的結構復原防護機制。
+- **操作按鈕**：
+  - **✒️ 格式化 (Format)**：執行具備上下文感知的頁面佈局重寫或插入 AI 見解。
+  - **🧹 清除 (Clear)**：清空當前頁面的對話狀態，以便重新開始。
+  - **■ 停止 (Stop)**：終止掛起的遠端伺服器請求，同時優雅地保存工具日誌與部分已生成的內容軌跡。
+  - **📥 匯出 (Export)**：立即將您的對話紀錄與系統工具執行軌跡匯出至結構化的本地 Markdown 檔案中。也可透過命令面板喚出（`Ctrl+Shift+P` -> 輸入 `Export Chat`）。
 
 ---
 
-### 📺 影片示範
+### 🛠️ 配置設定
+
+您可直接在官方的 Logseq 外掛設定面板中調整以下數值：
+
+- **API Key**：您選擇的推論供應商所需的金鑰憑證。
+- **Model**：您的目標 LLM 模型識別碼（例如 `openai/gpt-4o-mini`，兼容任何標準的 OpenAI 規範格式）。
+- **Base Path**：自訂連線路由。非常適合用來連接 OpenRouter、API 網關，或是離線的本地終端（例如 Ollama / LM Studio）。
+- **Web Search API Key**：*(選填)* 填入您的 Tavily API 字串，解鎖即時搜尋能力以及自動化的事實查核。
+- **自訂標籤 (Custom Tag)**：定義插入結構更新時的標籤區塊（例如 `#AI`）。Impeller 原生支援在區塊正上方插入乾淨的 `---` 水平分隔線，讓排版視覺更加簡潔。
+- **智慧索引效能 (Smart Indexing)**：初始設定會對您的全域圖譜節點進行一次完整同步分析；之後的每次工作流程，都將透過本地的差異快取層實現「秒級」載入。
+
+---
+
+### 📺 影片演示
 
 [![Impeller AI Demo](https://img.youtube.com/vi/NQm55NCPv98/maxresdefault.jpg)](https://youtu.be/NQm55NCPv98)  
-*(註：此示範影片基於 v0.2.0 的早期介面與核心工作流。雖然基礎互動邏輯相同，但較新的功能如網頁搜尋、增量向量快取、智慧記憶體與訊息控制並未在影片中呈現。)*
+*(註：本影片展示的是 **v0.2.0** 版本的核心介面與工作流。雖然基本互動方式保持不變，但如「網路搜尋」、「記憶體管理」以及「進階訊息控制」等較新的功能並未在影片中展現，其皆遵循相同的直覺化設計理念。)*
 
 ---
 
-## 🐞 反饋與問題
+## 🐞 反饋與問題回報
 
-如果您在寫筆記的過程中發現 Bug，或者有更瘋狂的功能狂想，我們誠摯地邀請您至 GitHub [開啟一個全新的 Issue](https://github.com/hhs456/logseq-impeller-ai/issues)。
+發現了 Bug 或是有效能優化的好點子嗎？我們非常樂意聽取您的意見！請隨時在 GitHub 上 [發起 Issue](https://github.com/hhs456/logseq-impeller-ai/issues)。
 
 ---
 
-## 📜 版本與更動歷史
+## 📜 版本實作與發布
 
-本專案嚴格遵循 [語意化版本號 (Semantic Versioning)](https://semver.org/) 規範。  
-關於歷史上各個階段的完整修復與更新細節，請隨時查閱獨立的 [CHANGELOG.md](./CHANGELOG.md)。
+我們嚴格遵守 [語意化版本 (Semantic Versioning)](https://semver.org/) 規範。如需查看完整的更新日誌與細粒度的版本軌跡記錄，請參閱專屬的 [CHANGELOG.md](./CHANGELOG.md) 文件。
 
 ---
 
 ### 📄 授權條款
 
-本專案採用 **MIT License** 條款開源授權。
+本專案採用 **MIT License** 開源授權。

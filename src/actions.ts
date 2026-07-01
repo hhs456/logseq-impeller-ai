@@ -6,6 +6,8 @@ import { buildSystemPrompt } from './prompts';
 import { MemoryManager } from './memory';
 import { agent } from './agent';
 
+let isCopying = false;
+
 export const actions = {
     async updatePageContext() {
         let entity: any = await logseq.Editor.getCurrentPage();
@@ -89,5 +91,59 @@ export const actions = {
             await writeToLogseq(res, targetUuid);
             logseq.UI.showMsg(state.t.done, 'success');
         }
-    }
+    },
+
+    // 新增/修改：複製程式碼的方法 (修復 Iframe 焦點與跨域限制)
+    copyCode: async (e: any) => {
+        const rawCode = e.dataset.code; 
+        if (rawCode) {
+            try {
+                // 將內容反向解碼
+                const decodedCode = decodeURIComponent(rawCode);
+                
+                // 優先使用 parent 的剪貼簿 API，因為 parent 主視窗才擁有系統焦點
+                try {
+                    await window.parent.navigator.clipboard.writeText(decodedCode);
+                    logseq.UI.showMsg('✅ 程式碼已複製至剪貼簿！', 'success');
+                } catch (err) {
+                    // Fallback 降級處理 (建立隱藏的 textarea 並使用 execCommand 強制複製)
+                    const textArea = window.parent.document.createElement("textarea");
+                    textArea.value = decodedCode;
+                    textArea.style.position = "fixed";
+                    textArea.style.opacity = "0";
+
+                    window.parent.document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+
+                    try {
+                        const successful = window.parent.document.execCommand('copy');
+                        window.parent.document.body.removeChild(textArea);
+
+                        if (successful) {
+                            logseq.UI.showMsg('✅ 程式碼已複製至剪貼簿！(降級模式)', 'success');
+                        } else {
+                            throw new Error('execCommand returned false');
+                        }
+                    } catch (fallbackErr) {
+                        window.parent.document.body.removeChild(textArea);
+                        console.error('複製程式碼完全失敗:', err, fallbackErr);
+                        logseq.UI.showMsg('❌ 複製失敗，剪貼簿遭到系統底層封鎖', 'error');
+                    }
+                }
+            } catch (err) {
+                console.error('Decode failed:', err);
+                logseq.UI.showMsg('❌ 解碼失敗', 'error');
+            }
+        }
+    },
+    openPage: async (e: any) => {
+        // 從我們上面設定的 data-page-name 取得頁面名稱
+        const pageName = e.dataset.pageName;
+        
+        if (pageName) {
+            // 利用 Logseq API 執行頁面跳轉
+            await logseq.App.pushState('page', { name: pageName });
+        }
+    },
 };

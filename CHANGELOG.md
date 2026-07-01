@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-07-01
+
+### Added
+- **Rich Markdown Rendering**: Upgraded the AI response interface to fully support standard Markdown syntax, seamlessly rendering headers, blockquotes, tables, and code blocks.
+- **Code Block Quick Copy**: Introduced a native "Copy" button to all rendered code blocks, drastically improving the developer workflow and clipboard experience.
+- **Native Text Selection**: Enabled cursor text selection across the entire chat conversation, allowing users to effortlessly highlight and copy specific parts of the AI's output.
+
+### Changed
+- **UI Architecture Modularization**: Refactored the monolithic UI rendering logic into a clean, decoupled structure to maintain code readability and separation of concerns. Responsibilities are now neatly split across `src/utils/markdown.ts`, `src/ui/styles.ts`, `src/ui/components.ts`, and the core `src/ui.ts`.
+
 ## [0.7.0] - 2026-06-24
 
 Added
