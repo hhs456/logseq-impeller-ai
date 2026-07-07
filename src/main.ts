@@ -8,7 +8,7 @@ import { renderUI } from './ui';
 import { syncVectorDB } from './rag'; // 👈 1. 改為引入全新的增量同步函式
 
 async function main() {
-    console.log("Impeller AI 外掛已載入！");
+    console.log("Impeller AI Plugin Loaded");
 
     const config = await logseq.App.getUserConfigs();
     state.t = config.preferredLanguage?.startsWith("zh") ? I18N["zh-TW"] : I18N["en"];
@@ -76,6 +76,12 @@ async function main() {
             await actions.updatePageContext();
             renderUI();
         }
+    });
+
+    // 💡 新增：全域監聽使用者「切換圖表」的動作！
+    logseq.App.onCurrentGraphChanged(async () => {
+        // 當使用者切換 Graph 時，立刻呼叫重置隔離邏輯
+        await actions.handleGraphChange();
     });
 
     // 👈 2. 啟動時執行一次增量同步

@@ -111,4 +111,39 @@ export const SIDEBAR_CSS = `
     #right-sidebar #ai-sidebar-container .ai-bubble-content p:last-child {
         margin-bottom: 0px;
     }
+    
+    /* 🌟 7. 時間戳記美化 (新版 v0.8.0 專屬) */
+    #right-sidebar #ai-sidebar-container .ai-chat-time {
+        font-size: 10px !important;
+        opacity: 0.45;
+        display: block;
+        text-align: right;
+        margin-top: 6px;
+        font-family: var(--ls-font-family, sans-serif);
+        user-select: none; /* 避免使用者複製 AI 內文時不小心選取到時間 */
+    }
+
+    /* 🌟 8. 橫向記憶庫分頁列美化 (v0.8.0 專屬) */
+    #right-sidebar #ai-sidebar-container .ai-memory-page-link:hover {
+        background: var(--ls-secondary-background-color) !important;
+        border-color: var(--ls-link-text-color) !important;
+        opacity: 1 !important;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+    }
+
+    /* 自訂美化橫向滾動條，使其變成極細的現代扁平設計 */
+    #right-sidebar #ai-sidebar-container .ai-memory-scrollbar-container::-webkit-scrollbar {
+        height: 4px; /* 極細的水平滾動條高度 */
+    }
+    #right-sidebar #ai-sidebar-container .ai-memory-scrollbar-container::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    #right-sidebar #ai-sidebar-container .ai-memory-scrollbar-container::-webkit-scrollbar-thumb {
+        background: var(--ls-border-color);
+        border-radius: 10px;
+    }
+    #right-sidebar #ai-sidebar-container .ai-memory-scrollbar-container::-webkit-scrollbar-thumb:hover {
+        background: var(--ls-link-text-color);
+    }
 `;

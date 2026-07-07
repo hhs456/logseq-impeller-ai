@@ -39,6 +39,9 @@ export const I18N = {
         // --- 匯出功能 ---
         exportNoChat: "目前沒有對話可以匯出喔！",
         exportSuccess: "✅ 已匯出對話：{name}",
+        confirmClear: "確定要清空這頁的所有 AI 對話紀錄嗎？此動作無法復原！",
+        confirmDelete: "確定要刪除這則訊息嗎？\n⚠️ 注意：這將會一併清除此訊息之後的「所有」對話紀錄！",
+        confirmRegenerate: "確定要讓 AI 重新回答嗎？\n⚠️ 注意：這將會捨棄這則回答之後的「所有」對話紀錄！"
     },
     "en": {
         langName: "English",
@@ -76,16 +79,21 @@ export const I18N = {
         ragQueryError: "An error occurred while querying [[{targetPage}]]",
         // --- Export Feature ---
         exportNoChat: "No chat history to export!",
-        exportSuccess: "✅ Chat exported: {name}"
+        exportSuccess: "✅ Chat exported: {name}",
+        confirmClear: "Are you sure you want to clear all AI chat history for this page? This action cannot be undone!",
+        confirmDelete: "Are you sure you want to delete this message?\n⚠️ Note: This will also clear all subsequent chat history!",
+        confirmRegenerate: "Are you sure you want to regenerate the AI response?\n⚠️ Note: This will discard all subsequent chat history!"
     }
 };
 
 export const state: AppState = {
     chatStore: {}, 
     currentPageUuid: null, 
+    currentGraphPath: null, // 💡 初始化
     isBusy: false, 
     isVisible: false, 
     isCollapsed: false,
+    isMemoryCollapsed: false,
     tempInput: "", 
     t: null, 
     abortController: null, 

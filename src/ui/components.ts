@@ -1,5 +1,7 @@
 // src/ui/components.ts
 import { escapeHTML, renderMarkdown } from '../utils/markdown';
+import { MemoryManager } from '../memory';
+import { state } from '../config';
 
 /**
  * 建立側邊欄頂部 Header
@@ -11,67 +13,123 @@ export function buildHeader(isCollapsed: boolean, aiBtnText: string): string {
             <span style="font-size: 10px; opacity: 0.5;">${isCollapsed ? '▶' : '▼'}</span>
             <span style="font-weight: 600; font-size: 0.85em; opacity: 0.8;">🤖 ${aiBtnText.toUpperCase()}</span>
         </div>
-        <a data-on-click="hidePanel" style="opacity: 0.5; padding: 4px;">✕</a>
+        <a data-on-click="hidePanel" style="opacity: 0.5; padding: 4px; cursor: pointer;">✕</a>
     </div>`;
 }
 
 /**
- * 建立聊天對話歷史區塊
+ * 💡 新增：建立固定在 Header 下方的長期對話記憶庫區塊 (支援水平卷軸與折疊)
+ */
+export function buildMemorySection(isMemoryCollapsed: boolean): string {
+    const savedPages = MemoryManager.getAllSavedPages();
+    if (savedPages.length === 0) return '';
+
+    const titleText = state.t?.langName?.includes("Chinese") ? "🧠 歷史對話記憶庫" : "🧠 Chat Memories";
+    const arrowIcon = isMemoryCollapsed ? '▶' : '▼';
+
+    const linksHtml = savedPages.map(p => `
+        <span class="ai-memory-page-link" 
+              data-on-click="openPage" 
+              data-page-name="${escapeHTML(p.name)}" 
+              title="${escapeHTML(p.name)}"
+              style="cursor: pointer; padding: 4px 10px; background: var(--ls-primary-background-color); border: 1px solid var(--ls-border-color); border-radius: 6px; font-size: 11px; white-space: nowrap; flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; color: var(--ls-primary-text-color); opacity: 0.8; transition: all 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+            📄 ${escapeHTML(p.name)}
+        </span>
+    `).join('');
+
+    return `
+    <div class="ai-memory-section" style="background: var(--ls-tertiary-background-color); border-bottom: 1px solid var(--ls-border-color); width: 100%; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0;">
+        
+        <div data-on-click="toggleMemoryCollapse" style="padding: 8px 15px; display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; background: var(--ls-secondary-background-color); border-bottom: ${isMemoryCollapsed ? 'none' : '1px dashed var(--ls-border-color)'};">
+            <span style="font-size: 9px; opacity: 0.4;">${arrowIcon}</span>
+            <span style="font-size: 11px; font-weight: bold; opacity: 0.5; letter-spacing: 0.5px;">${titleText.toUpperCase()}</span>
+            <span style="font-size: 10px; opacity: 0.4; background: var(--ls-primary-background-color); padding: 1px 6px; border-radius: 10px; font-weight: bold;">${savedPages.length}</span>
+        </div>
+        
+        <div class="ai-memory-scrollbar-container" style="display: ${isMemoryCollapsed ? 'none' : 'flex'}; flex-direction: row; flex-wrap: nowrap; gap: 6px; overflow-x: auto; padding: 10px 15px; width: 100%; box-sizing: border-box; align-items: center;">
+            ${linksHtml}
+        </div>
+        
+    </div>
+    `;
+}
+
+/**
+ * 建立聊天對話歷史區塊 (還原為純對話內容，移除清單)
  */
 export function buildChatHistory(messages: any[], isBusy: boolean, busyMessage: string, welcomeText: string): string {
-    // 渲染對話訊息
     const messageElements = messages.length === 0 
-        ? `<div style="font-size: 14px; padding: 10px; opacity: 0.6;">${welcomeText}</div>`
-        : messages.map((m: any, index: number) => {
-            const isUser = m.role === 'user';
-            const bgColor = isUser ? 'var(--ls-quaternary-background-color)' : 'var(--ls-secondary-background-color)';
-            const contentHtml = isUser ? escapeHTML(m.content).replace(/\n/g, '<br>') : renderMarkdown(m.content);
-            
-            // 操作按鈕 (複製/刪除/重新生成)
-            const copyBtn = `<button class="ai-copy-btn" style="opacity: 0.7; position: static;" data-on-click="copyMsg" data-index="${index}" title="複製">📋</button>`;
-            const actionBtn = isUser
-                ? `<button class="ai-copy-btn" style="opacity: 0.7; position: static; color: #e74c3c;" data-on-click="deleteMsg" data-index="${index}" title="刪除此筆及後續">⏹️</button>`
-                : `<button class="ai-copy-btn" style="opacity: 0.7; position: static; color: #3498db;" data-on-click="regenerateMsg" data-index="${index}" title="重新生成">🔄</button>`;
-            
+        ? `<div style="font-size: 14px; padding: 20px; opacity: 0.4; text-align: center; line-height: 1.6;">${welcomeText}</div>`
+        : messages.map((msg, index) => {
+            const roleStr = msg.role as string;
+            if (roleStr === 'system') return ''; 
+
+            const isUser = roleStr === 'user';
+            const alignStyle = isUser ? 'align-self: flex-end; background: var(--ls-secondary-background-color);' : 'align-self: flex-start; background: var(--ls-tertiary-background-color);';
+            const bubbleClass = isUser ? 'ai-bubble-user' : 'ai-bubble-assistant';
+
+            // 💡 修正：時間顯示格式改為完整的「年月日 時:分」
+            const timeStr = msg.timestamp 
+                ? new Date(msg.timestamp).toLocaleString([], { 
+                    year: 'numeric', 
+                    month: '2-digit', 
+                    day: '2-digit', 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    hour12: false 
+                  }) 
+                : '';
+
+            let innerContent = '';
+            if (roleStr === 'tool') {
+                innerContent = `<div style="font-size: 11px; font-family: monospace; opacity: 0.6;">🛠️ Tool Call Result:<br/>${escapeHTML(msg.content)}</div>`;
+            } else {
+                innerContent = renderMarkdown(msg.content);
+            }
+
             return `
-            <div class="msg-wrapper" style="align-self: ${isUser ? 'flex-end' : 'flex-start'}; max-width: 85%; position: relative;">
-                <div class="ai-bubble-content" style="padding: 8px 12px; padding-right: 54px; border-radius: 12px; 
-                    background: ${bgColor}; 
-                    border: 1px solid var(--ls-border-color);">
-                    ${contentHtml}
+            <div class="chat-bubble-container" style="display: flex; flex-direction: column; width: 100%; margin-bottom: 12px;">
+                <div class="${bubbleClass}" style="max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; ${alignStyle} box-shadow: 0 1px 2px rgba(0,0,0,0.05); position: relative;">
+                    <div class="ai-bubble-content">${innerContent}</div>
+                    ${timeStr ? `<span class="ai-chat-time">${timeStr}</span>` : ''}
                 </div>
-                <div style="position: absolute; top: 4px; right: 4px; display: flex; gap: 0px;">
-                    ${copyBtn}${actionBtn}
+                
+                ${!isUser && roleStr !== 'tool' ? `
+                <div style="display: flex; gap: 10px; margin-left: 6px; margin-top: 4px; opacity: 0.5; font-size: 11px;">
+                    <span class="ai-action-link" data-on-click="copyMsg" data-index="${index}" style="cursor:pointer;">📋 Copy</span>
+                    <span class="ai-action-link" data-on-click="regenerateMsg" data-index="${index}" style="cursor:pointer;">🔄 Retry</span>
                 </div>
-            </div>`;
+                ` : ''}
+
+                ${isUser ? `
+                <div style="display: flex; justify-content: flex-end; margin-right: 6px; margin-top: 4px; opacity: 0.3; font-size: 11px;">
+                    <span class="ai-action-link" data-on-click="deleteMsg" data-index="${index}" style="cursor:pointer;">🗑️ Delete</span>
+                </div>
+                ` : ''}
+            </div>
+            `;
         }).join('');
 
-    // 處理中 (Thinking/Busy) 的動畫文字區塊
     const busyElement = isBusy 
-        ? `<div style="align-self: flex-start; max-width: 85%;">
-             <div class="ai-pulse" style="padding: 8px 12px; font-size: 13px; opacity: 0.6; font-style: italic; color: var(--ls-active-primary-color); font-weight: 600;">
-                 ${busyMessage}
-             </div>
-           </div>` 
+        ? `<div style="align-self: flex-start; max-width: 85%; background: var(--ls-tertiary-background-color); padding: 10px 14px; border-radius: 12px; font-size: 13px; opacity: 0.6; font-style: italic; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">${busyMessage}</div>` 
         : '';
 
     return `
-    <div id="ai-chat-history-scroll" style="flex: 1; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
+    <div id="ai-sidebar-history" style="flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; background: var(--ls-primary-background-color); border-bottom: 1px solid var(--ls-border-color); box-sizing: border-box;">
         ${messageElements}
         ${busyElement}
     </div>`;
 }
 
 /**
- * 建立底部輸入區塊與操作列
+ * 建立底部輸入區塊
  */
 export function buildInputArea(placeholderText: string, isBusy: boolean): string {
     const disabledAttr = isBusy ? 'disabled' : '';
-    
-    // 右下角主要操作按鈕 (停止或發送)
-    const primaryActionButton = isBusy
-        ? `<button data-on-click="stopTask" class="ai-btn-action ai-stop-btn" style="flex: 0.6; border-radius: 6px;">■</button>`
-        : `<button data-on-click="sendMsg" class="ai-btn-action" style="flex: 0.6; background: var(--ls-quaternary-background-color); border: 1px solid var(--ls-border-color); border-radius: 6px; opacity: 0.9;">➤</button>`;
+    const btnText = isBusy ? `🛑 Stop` : `➤ Send`;
+    const btnActionStyle = isBusy 
+        ? `data-on-click="stopTask" style="flex: 0.8; background: var(--ls-error-background-color, #ff4d4f); border: 1px solid var(--ls-border-color); border-radius: 6px; color: white; cursor: pointer; font-weight: bold;"` 
+        : `data-on-click="sendMsg" style="flex: 0.8; background: var(--ls-quaternary-background-color); border: 1px solid var(--ls-border-color); border-radius: 6px; opacity: 0.9; cursor: pointer; font-weight: bold;"`;
 
     return `
     <div style="padding: 12px; background: var(--ls-secondary-background-color); border-top: 1px solid var(--ls-border-color);">
@@ -79,11 +137,10 @@ export function buildInputArea(placeholderText: string, isBusy: boolean): string
             style="width: 100%; background: var(--ls-primary-background-color); color: var(--ls-primary-text-color); border: 1px solid var(--ls-border-color); border-radius: 6px; padding: 10px; font-size: 13px; resize: none; outline: none; margin-bottom: 8px; box-sizing: border-box;" 
             ${disabledAttr}></textarea>
         
-        <div style="display: flex; gap: 4px;">
-            <button data-on-click="clearChat" class="ai-btn-action" style="flex: 1; padding: 6px 2px; opacity: 0.7; border: 1px solid var(--ls-border-color); border-radius: 6px;" ${disabledAttr}>🧹Clear</button>
-            <button data-on-click="exportChat" class="ai-btn-action" style="flex: 1; padding: 6px 2px; opacity: 0.7; border: 1px solid var(--ls-border-color); border-radius: 6px;" ${disabledAttr}>📥Export</button>
-            <button data-on-click="formatPage" class="ai-btn-action" style="flex: 1; padding: 6px 2px; font-weight: bold; opacity: 0.85; border: 1px solid var(--ls-border-color); border-radius: 6px;" ${disabledAttr}>✒️Format</button>
-            ${primaryActionButton}
+        <div style="display: flex; gap: 6px;">
+            <button data-on-click="clearChat" class="ai-btn-action" style="flex: 1; padding: 6px 2px; opacity: 0.7; border: 1px solid var(--ls-border-color); border-radius: 6px; cursor: pointer;" ${disabledAttr}>🧹 Clear</button>
+            <button data-on-click="exportChat" class="ai-btn-action" style="flex: 1; padding: 6px 2px; opacity: 0.7; border: 1px solid var(--ls-border-color); border-radius: 6px; cursor: pointer;">📤 Export</button>
+            <button ${btnActionStyle}>${btnText}</button>
         </div>
     </div>`;
 }

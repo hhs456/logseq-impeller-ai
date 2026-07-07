@@ -1,6 +1,6 @@
 # 🌀 Impeller AI
 
-![Version](https://img.shields.io/badge/version-v0.8.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.9.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Logseq](https://img.shields.io/badge/Logseq-Plugin-0f172a?logo=logseq)
 
@@ -17,25 +17,30 @@
 `0.5.0`
 |<img src="./img/screenshot_format.jpg" width="400" alt="Format Page Feature">|<img src="./img/screenshot_copy.jpg" width="400" alt="Advanced Message Controls">|
 |:---:|:---:|
-| *智慧階層格式化* | *對話快捷操作 (複製/重生成)* |
+| *智慧層級排版* | *便捷對話操作 (複製/重新生成)* |
 
 `0.6.0`
 |<img src="./img/screenshot_rag.jpg" width="400" alt="Incremental RAG Sync">|<img src="./img/screenshot_export.jpg" width="400" alt="Export Chat Feature">|
 |:---:|:---:|
 |<img src="./img/screenshot_rag_2.jpg" width="400" alt="Incremental RAG Sync">|<img src="./img/screenshot_export_2.jpg" width="400" alt="Export Chat Feature">|
-| *增量 RAG 同步* | *一鍵匯出對話紀錄* |
+| *增量 RAG 向量同步* | *一鍵匯出對話* |
 
 `0.7.0`
 |<img src="./img/screenshot_auto_serach.jpg" width="400" alt="Agentic Call Traces">|<img src="./img/screenshot_code_review.jpg" width="400" alt="Cross-file Structure Assembly">|
 |:---:|:---:|
-| *自主網頁與知識庫探索* | *圖譜跨檔案導航 (精準定位至行)* |
+| *自主網路搜尋與知識庫探索* | *圖譜導航 (精準鎖定單行節點)* |
 
 `0.8.0`
 |<img src="./img/screenshot_md_header.jpg" width="400" alt="Markdown Headers">|<img src="./img/screenshot_md_link&list.jpg" width="400" alt="Markdown Links and Lists">|
 |:---:|:---:|
-| *進階渲染：標題* | *進階渲染：連結與列表* |
+| *豐富渲染：標題* | *豐富渲染：連結與列表* |
 |<img src="./img/screenshot_md_block&table.jpg" width="400" alt="Markdown Blockquotes & Tables">|<img src="./img/screenshot_md_code.jpg" width="400" alt="Markdown Code Blocks">|
-| *進階渲染：引用與表格* | *進階渲染：程式碼 (支援複製)* |
+| *豐富渲染：區塊引用與表格* | *豐富渲染：程式碼區塊 (可複製)* |
+
+`0.9.0`
+|<img src="./img/screenshot_history.jpg" width="800" alt="Persistent Chat History">|
+|:---:|
+| *持久化的分頁對話歷史紀錄* |
 
 ---
 
@@ -51,12 +56,14 @@ Impeller AI 深度整合了 Logseq 的區塊（Block）生態系統。它不僅�
 ### 🌳 原生區塊與上下文處理
 * **AST 轉巢狀區塊**：突破純文字限制。內部的 AST 解析器（`parseMarkdownToTree`）能將 AI 生成的 Markdown 直接轉換為 Logseq 原生的巢狀父子區塊。它還會自動在區塊前加上水平分隔線與自訂標籤（例如 `--- \n#AI`）以保持層級視覺的整潔。
 * **自動雙向連結**：提示詞層級的約束會指示 AI 在生成內容時，自動識別圖譜中的核心概念，並將其包裹在 `<span class="logseq-page-ref">Wiki-links (雙向連結)</span>` 中。
-* **自動壓縮記憶體**：實作了嚴格的 Token 節約機制。當聊天紀錄超過 12 則訊息時，背景工作執行緒會自動將最舊的 6 則訊息壓縮為簡明的總結摘要，在嚴格限制滑動視窗的同時保留長期的上下文脈絡。
+* **進階記憶體管理與自動壓縮**：由升級版的 `MemoryManager` 驅動，採用滑動視窗（Sliding window）機制並結合無損壓縮技術。這大幅擴展了有效的上下文容量，消除了 Token 溢位的風險，無縫地保留您的長期對話脈絡。
 
 ### ✨ 精緻的側邊欄工作流
-* **豐富的 Markdown 渲染 ✨（v0.8.0 全新功能！）**：排版與使用者體驗的巨大飛躍！側邊欄聊天現在開箱即支援完整的原生 Markdown 渲染。輸出內容能輕鬆呈現層次分明的**標題**、精確的**連結**、原生的**列表**、優雅的**引用區塊**、複雜的**表格**以及具備語法突顯的**程式碼區塊**——讓您在將內容應用至圖譜前，就能獲得高可讀性且結構化的視覺預覽。
+* **持久化歷史紀錄與時間戳（v0.9.0 全新功能！）**：導入永久性的對話歷史紀錄系統與分頁列表，讓您可以輕鬆導覽並恢復過去的會話。每一次互動都奠基於精確的時間戳記（`YYYY-MM-DD HH:mm`）。
+* **側邊欄介面重構（v0.9.0 全新功能！）**：經過人體工學優化的側邊欄介面，能智慧地佔用完整寬度，達到最大化的閱讀體驗。
+* **豐富的 Markdown 渲染**：開箱即支援完整的原生 Markdown 渲染。輸出內容能輕鬆呈現層次分明的**標題**、精確的**連結**、原生的**列表**、優雅的**引用區塊**、複雜的**表格**以及具備語法突顯的**程式碼區塊**。
 * **智慧應用 (Apply) 邏輯**：「應用」指令會動態分析聊天上下文。它能智慧地在 `applyReformat`（純粹修復結構縮排而不新增文字）和 `applyContext`（附加新生成的區塊）兩種模式之間靈活切換。
-* **零摩擦 Markdown 剪貼簿**：將游標懸停在聊天訊息上即可顯示精確的控制項（複製、重新生成、刪除）。複製功能會直接從 DOM dataset 提取預處理過的 `rawMarkdown`，防止瀏覽器 HTML 污染並完美保留純粹的 Logseq 格式。
+* **零摩擦 Markdown 剪貼簿**：將游標懸停在聊天訊息上即可顯示精確的控制項（複製、重新生成、刪除）。複製功能會直接從 DOM 提取預處理過的純 Markdown，防止瀏覽器 HTML 污染。
 * **非阻塞與可匯出**：支援透過 `AbortController` 手動取消生成任務。您可以輕鬆地透過命令面板（`export-ai-chat`）將整個聊天紀錄（包含深度的工具執行軌跡）匯出為乾淨的 Markdown 檔案。
 
 ---
@@ -77,16 +84,16 @@ Impeller AI 深度整合了 Logseq 的區塊（Block）生態系統。它不僅�
 Impeller UI 常駐於您的 **右側邊欄** 中，作為您跨頁面持續存在的創意夥伴。
 
 - **開關側邊欄**：點擊上方工具列中的 **AI Assistant** 圖示以顯示或隱藏面板。
-- **對話互動**：在輸入框輸入您的指令。按下 `Enter` 送出，或使用 `Shift+Enter` 換行。
+- **對話互動**：在輸入框輸入您的指令。按下 `Enter` 送出，或使用 `Shift+Enter` 換行。透過全新的**分頁歷史紀錄**功能，可輕鬆導覽並接續先前的對話。
 - **訊息節點操作**：將鼠標懸停在任何回應氣泡上，可顯示節點控制項：
   - **📋 複製 (Copy)**：即時截取回應內容（繞過 iframe 沙盒邊界限制）。
   - **⏹️ 刪除 (Delete)**：銷毀該提示節點並安全地切斷後續的上下文，以維持對話的連貫性。
   - **🔄 重新生成 (Regenerate)**：強制重新評估該節點步驟，並具備自動化的結構復原防護機制。
 - **操作按鈕**：
   - **✒️ 格式化 (Format)**：執行具備上下文感知的頁面佈局重寫或插入 AI 見解。
-  - **🧹 清除 (Clear)**：清空當前頁面的對話狀態，以便重新開始。
+  - **🧹 清除 (Clear)**：清空當前頁面的對話狀態以便重新開始。包含一個**防呆確認機制**，以防止意外刪除對話上下文。
   - **■ 停止 (Stop)**：終止掛起的遠端伺服器請求，同時優雅地保存工具日誌與部分已生成的內容軌跡。
-  - **📥 匯出 (Export)**：立即將您的對話紀錄與系統工具執行軌跡匯出至結構化的本地 Markdown 檔案中。也可透過命令面板喚出（`Ctrl+Shift+P` -> 輸入 `Export Chat`）。
+  - **📥 匯出 (Export)**：立即將您的對話紀錄與系統工具執行軌跡匯出至結構化的本地 Markdown 檔案中。也可透過命令面板喚出。
 
 ---
 
@@ -106,7 +113,7 @@ Impeller UI 常駐於您的 **右側邊欄** 中，作為您跨頁面持續存�
 ### 📺 影片演示
 
 [![Impeller AI Demo](https://img.youtube.com/vi/NQm55NCPv98/maxresdefault.jpg)](https://youtu.be/NQm55NCPv98)  
-*(註：本影片展示的是 **v0.2.0** 版本的核心介面與工作流。雖然基本互動方式保持不變，但如「網路搜尋」、「記憶體管理」以及「進階訊息控制」等較新的功能並未在影片中展現，其皆遵循相同的直覺化設計理念。)*
+*(註：本影片展示的是 **v0.2.0** 版本的核心介面與工作流。雖然基本互動方式保持不變，但如持久化歷史紀錄、網路搜尋、系統軌跡以及進階訊息控制等較新功能並未在影片中展現，其皆遵循相同的直覺化設計理念。)*
 
 ---
 

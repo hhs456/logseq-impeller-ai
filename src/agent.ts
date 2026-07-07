@@ -7,6 +7,25 @@ import { buildSystemPrompt } from './prompts';
 import { MemoryManager } from './memory';
 import { getAvailableTools, executeToolCall } from './tools';
 
+
+// 在 agent 物件外部新增輔助函式
+const getTxt = (tree: any[]): string => tree.reduce((acc, b) => acc + b.content + '\n' + (b.children ? getTxt(b.children) : ''), '');
+
+async function buildPageContextPrompt(pageUuid: string): Promise<string> {
+    const blocks = await logseq.Editor.getPageBlocksTree(pageUuid);
+    const system = buildSystemPrompt({ langName: state.t.langName, isWritingToPage: false });
+    const pageName = state.chatStore[pageUuid]?.name || "Unknown Page";
+    // 統一格式
+    return `${system}\n\n【Page Name】: ${pageName}\n\n【Page Content】:\n${getTxt(blocks)}`;
+}
+
+function showBackgroundCompletionMsg(pageUuid: string) {
+    if (state.currentPageUuid !== pageUuid) {
+        const finishedPageName = state.chatStore[pageUuid]?.name || state.t.bgPage;
+        logseq.UI.showMsg(state.t.bgChatDone.replace('{name}', finishedPageName), 'success');
+    }
+}
+
 export const agent = {
     stopTask() {
         if (state.abortController) state.abortController.abort();
@@ -72,7 +91,7 @@ export const agent = {
                                 name: toolCall.function.name,
                                 content: toolResultString
                             });
-                            renderUI(); 
+                            renderUI();
                         } catch (err) {
                             currentMessages.push({
                                 role: "tool",
@@ -83,7 +102,7 @@ export const agent = {
                         }
                     }
                     iterations++;
-                    continue; 
+                    continue;
                 }
 
                 return message.content;
@@ -122,6 +141,8 @@ export const agent = {
                     const currentData = state.chatStore[state.currentPageUuid];
                     if (currentData) {
                         currentData.msgs.push({ role: "assistant", content: abortSummary });
+                        // 💡 修改：被強制中止後產生的報告也需要存起來
+                        MemoryManager.saveHistory(state.currentPageUuid);
                     }
                 }
 
@@ -146,20 +167,17 @@ export const agent = {
         const targetUuid = state.currentPageUuid;
         state.processingPageUuid = targetUuid;
 
-        state.chatStore[targetUuid].msgs.push({ role: "user", content: state.tempInput });
+        state.chatStore[targetUuid].msgs.push({
+            role: "user",
+            content: state.tempInput,
+            timestamp: Date.now()  // 💡 新增時間戳記
+        });
         state.tempInput = "";
 
         await MemoryManager.compressIfNeeded(targetUuid, agent.ask.bind(this));
 
-        const blocks = await logseq.Editor.getPageBlocksTree(targetUuid);
-        const getTxt = (tree: any[]): string => tree.reduce((acc, b) => acc + b.content + '\n' + (b.children ? getTxt(b.children) : ''), '');
-
-        const system = buildSystemPrompt({ langName: state.t.langName, isWritingToPage: false });
-        const pageName = state.chatStore[targetUuid]?.name || "Unknown Page";
-
-        const promptWithContext = `${system}\n\n【Page Name】: ${pageName}\n\n【Page Content】:\n${getTxt(blocks)}`;
-
-        const recentHistory = MemoryManager.getRecentHistory(targetUuid);
+        const promptWithContext = await buildPageContextPrompt(targetUuid);
+        const recentHistory = MemoryManager.buildApiPayload(targetUuid);
 
         const res = await agent.ask([
             { role: "system", content: promptWithContext },
@@ -167,12 +185,9 @@ export const agent = {
         ], false);
 
         if (res) {
-            state.chatStore[targetUuid].msgs.push({ role: "assistant", content: res });
-
-            if (state.currentPageUuid !== targetUuid) {
-                const finishedPageName = state.chatStore[targetUuid]?.name || state.t.bgPage;
-                logseq.UI.showMsg(state.t.bgChatDone.replace('{name}', finishedPageName), 'success');
-            }
+            state.chatStore[targetUuid].msgs.push({ role: "assistant", content: res, timestamp: Date.now() });
+            MemoryManager.saveHistory(targetUuid);
+            showBackgroundCompletionMsg(targetUuid); // 共用通知
             renderUI();
         }
     },
@@ -181,6 +196,9 @@ export const agent = {
         const msgIndex = parseInt(e.dataset.index, 10);
         const pageUuid = state.currentPageUuid;
         if (!pageUuid || state.isBusy) return;
+
+        // 💡 1. 補上重新生成的 I18N 防呆
+        if (!confirm(state.t.confirmRegenerate)) return;
 
         state.processingPageUuid = pageUuid;
         const msgs = state.chatStore[pageUuid].msgs;
@@ -194,27 +212,23 @@ export const agent = {
         const originalBackup = msgs.slice(msgIndex);
         state.chatStore[pageUuid].msgs = msgs.slice(0, msgIndex);
 
-        const blocks = await logseq.Editor.getPageBlocksTree(pageUuid);
-        const getTxt = (tree: any[]): string => tree.reduce((acc, b) => acc + b.content + '\n' + (b.children ? getTxt(b.children) : ''), '');
-
-        const promptWithContext = `${buildSystemPrompt({ langName: state.t.langName, isWritingToPage: false })}\n\n【Page Name】: ${state.chatStore[pageUuid].name}\n\n【Content】:\n${getTxt(blocks)}`;
-
         let success = false;
 
         try {
+            // 💡 2. 使用 buildApiPayload 來節省 Token，而不是把整坨 msgs 丟過去
+            const promptWithContext = await buildPageContextPrompt(pageUuid);
+            const apiPayload = MemoryManager.buildApiPayload(pageUuid, 12);
+
             const res = await agent.ask([
                 { role: "system", content: promptWithContext },
-                ...state.chatStore[pageUuid].msgs
+                ...apiPayload
             ], true);
 
             if (res) {
-                state.chatStore[pageUuid].msgs.push({ role: "assistant", content: res });
+                state.chatStore[pageUuid].msgs.push({ role: "assistant", content: res, timestamp: Date.now() });
                 success = true;
-
-                if (state.currentPageUuid !== pageUuid) {
-                    const finishedPageName = state.chatStore[pageUuid]?.name || state.t.bgPage;
-                    logseq.UI.showMsg(state.t.bgChatDone.replace('{name}', finishedPageName), 'success');
-                }
+                MemoryManager.saveHistory(pageUuid);
+                showBackgroundCompletionMsg(pageUuid); // 共用通知
             }
         } catch (err) {
             console.error("重新生成失敗:", err);

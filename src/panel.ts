@@ -3,6 +3,7 @@ import '@logseq/libs';
 import { state } from './config';
 import { renderUI } from './ui';
 import { actions } from './actions';
+import { MemoryManager } from './memory';
 
 export const panel = {
     async togglePanel() {
@@ -29,11 +30,22 @@ export const panel = {
 
     clearChat() {
         if (state.currentPageUuid && state.chatStore[state.currentPageUuid]) {
+            // 💡 呼叫你在 config.ts 寫好的 I18N 提示
+            if (!confirm(state.t.confirmClear)) return;
+
             state.chatStore[state.currentPageUuid].msgs = [];
+            state.chatStore[state.currentPageUuid].summary = ""; // 連同摘要一起清空
+            MemoryManager.clearHistory(state.currentPageUuid); 
         }
         renderUI();
     },
 
+    // 💡 新增：切換歷史記憶庫清單的收合狀態
+    toggleMemoryCollapse() {
+        state.isMemoryCollapsed = !state.isMemoryCollapsed;
+        renderUI();
+    },
+    
     async copyMsg(e: any) {
         const msgIndex = parseInt(e.dataset.index, 10);
         const pageUuid = state.currentPageUuid;
@@ -80,7 +92,12 @@ export const panel = {
 
         if (!pageUuid || !state.chatStore[pageUuid]) return;
 
+        // 💡 呼叫 I18N 提示
+        if (!confirm(state.t.confirmDelete)) return;
+
         state.chatStore[pageUuid].msgs = state.chatStore[pageUuid].msgs.slice(0, msgIndex);
+        MemoryManager.saveHistory(pageUuid); 
+        
         logseq.UI.showMsg('🗑️ 已刪除該訊息及後續對話', 'info');
         renderUI();
     },
@@ -96,7 +113,11 @@ export const panel = {
         const markdownContent = `# AI Chat: ${chat.name}\n\n` + chat.msgs.map(m => {
             const roleStr = m.role as string;
             const roleName = roleStr === 'user' ? '🧑 **You**' : (roleStr === 'tool' ? '🛠️ **System**' : '🤖 **AI**');
-            return `${roleName}:\n${m.content}`;
+            
+            // 💡 匯出時也格式化時間
+            const timeStr = m.timestamp ? ` _(${new Date(m.timestamp).toLocaleString()})_` : '';
+            
+            return `${roleName}${timeStr}:\n${m.content}`;
         }).join('\n\n---\n\n');
 
         const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8;' });

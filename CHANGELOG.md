@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-07-08
+
+### Added
+- **Persistent Chat History**: Introduced a permanent chat history system complete with a paginated list, allowing users to effortlessly navigate and resume past sessions.
+- **Message Timestamps**: Chat messages now feature precise timestamps formatted as `YYYY-MM-DD HH:mm`, providing clear temporal context for all AI interactions.
+- **Clear History Failsafe**: Added a designated failsafe confirmation mechanism when attempting to clear the chat history, preventing accidental deletions.
+
+### Changed
+- **Advanced Memory Management**: Upgraded the `MemoryManager` to utilize a sliding window approach combined with lossless compression. This significantly expands the effective context capacity without risking token overflow.
+- **Sidebar UI & Layout Refactor**: Optimized the sidebar interface to occupy full width for maximum readability. Re-positioned the chat action buttons (`Retry`, `Copy`, `Delete`) to ensure a more intuitive and ergonomic user layout.
+
 ## [0.8.0] - 2026-07-01
 
 ### Added
