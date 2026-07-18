@@ -48,6 +48,13 @@ async function main() {
             title: "5. Web Search API Key",
             description: state.t.settingWebApiKeyDesc, // 👈 使用 i18n
             default: "",
+        },
+        {
+            key: "maxIterations",     // 變數名稱
+            type: "number",           // 數字類型
+            default: 7,               // 預設給 7 次
+            title: "6. Max Iterations",
+            description: state.t.settingMaxIterationsDesc, // 👈 使用 i18n
         }
     ]);
 

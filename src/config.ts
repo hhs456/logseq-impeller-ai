@@ -28,6 +28,7 @@ export const I18N = {
         settingBasePathDesc: "若使用本地端 (如 Ollama) 或代理伺服器，請在此更改 API 端點",
         settingTagDesc: "AI 輸出結果時自動加上標籤或標題 (預設: 🤖 AI 處理結果)",
         settingWebApiKeyDesc: "請輸入您的搜尋引擎 API Key（用於啟用 AI 聯網搜尋技能）",
+        settingMaxIterationsDesc: "決定 AI 每回合最多可連續自動翻閱檔案或搜尋的次數。(預設: 7)",
         // --- RAG 與向量搜尋相關 ---
         ragInitModel: "🧠 首次載入或更新模型中，需稍候 (約 90MB)...",
         ragIndexing: "⏳ 發現 {count} 筆新筆記或修改，正在建立神經索引...",
@@ -69,6 +70,7 @@ export const I18N = {
         settingBasePathDesc: "Change the API endpoint if using a local server (like Ollama) or proxy",
         settingTagDesc: "Custom tag or header for AI output (Default: 🤖 AI Result)",
         settingWebApiKeyDesc: "Please enter your search engine API key (to enable the AI web search skill).",
+        settingMaxIterationsDesc: "Set the maximum number of consecutive tool uses (file reading/searching) allowed per query. (Default: 7)",
         // --- RAG & Vector Search ---
         ragInitModel: "🧠 Initializing or updating model, please wait (approx. 90MB)...",
         ragIndexing: "⏳ Found {count} new or modified notes, building neural index...",

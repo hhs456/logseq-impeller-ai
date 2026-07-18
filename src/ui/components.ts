@@ -58,35 +58,36 @@ export function buildMemorySection(isMemoryCollapsed: boolean): string {
  * 建立聊天對話歷史區塊 (還原為純對話內容，移除清單)
  */
 export function buildChatHistory(messages: any[], isBusy: boolean, busyMessage: string, welcomeText: string): string {
-    const messageElements = messages.length === 0 
+    const messageElements = messages.length === 0
         ? `<div style="font-size: 14px; padding: 20px; opacity: 0.4; text-align: center; line-height: 1.6;">${welcomeText}</div>`
         : messages.map((msg, index) => {
             const roleStr = msg.role as string;
-            if (roleStr === 'system') return ''; 
+            if (roleStr === 'system') return '';
 
             const isUser = roleStr === 'user';
             const alignStyle = isUser ? 'align-self: flex-end; background: var(--ls-secondary-background-color);' : 'align-self: flex-start; background: var(--ls-tertiary-background-color);';
             const bubbleClass = isUser ? 'ai-bubble-user' : 'ai-bubble-assistant';
 
             // 💡 修正：時間顯示格式改為完整的「年月日 時:分」
-            const timeStr = msg.timestamp 
-                ? new Date(msg.timestamp).toLocaleString([], { 
-                    year: 'numeric', 
-                    month: '2-digit', 
-                    day: '2-digit', 
-                    hour: '2-digit', 
+            const timeStr = msg.timestamp
+                ? new Date(msg.timestamp).toLocaleString([], {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
                     minute: '2-digit',
-                    hour12: false 
-                  }) 
+                    hour12: false
+                })
                 : '';
 
             let innerContent = '';
             if (roleStr === 'tool') {
                 innerContent = `<div style="font-size: 11px; font-family: monospace; opacity: 0.6;">🛠️ Tool Call Result:<br/>${escapeHTML(msg.content)}</div>`;
             } else {
+                // 💡 乾淨俐落！直接交給優化後的 renderMarkdown，不在此處做二次加工
                 innerContent = renderMarkdown(msg.content);
             }
-
+            
             return `
             <div class="chat-bubble-container" style="display: flex; flex-direction: column; width: 100%; margin-bottom: 12px;">
                 <div class="${bubbleClass}" style="max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; ${alignStyle} box-shadow: 0 1px 2px rgba(0,0,0,0.05); position: relative;">
@@ -110,8 +111,8 @@ export function buildChatHistory(messages: any[], isBusy: boolean, busyMessage: 
             `;
         }).join('');
 
-    const busyElement = isBusy 
-        ? `<div style="align-self: flex-start; max-width: 85%; background: var(--ls-tertiary-background-color); padding: 10px 14px; border-radius: 12px; font-size: 13px; opacity: 0.6; font-style: italic; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">${busyMessage}</div>` 
+    const busyElement = isBusy
+        ? `<div style="align-self: flex-start; max-width: 85%; background: var(--ls-tertiary-background-color); padding: 10px 14px; border-radius: 12px; font-size: 13px; opacity: 0.6; font-style: italic; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">${busyMessage}</div>`
         : '';
 
     return `
@@ -125,20 +126,23 @@ export function buildChatHistory(messages: any[], isBusy: boolean, busyMessage: 
  * 建立底部輸入區塊
  */
 export function buildInputArea(placeholderText: string, isBusy: boolean): string {
-    const disabledAttr = isBusy ? 'disabled' : '';
+    // 👑 核心優化：絕對不要用 disabled！改用 readonly 搭配 opacity，讓它永遠活在焦點樹中
+    const disabledAttr = isBusy ? 'readonly' : '';
+    const visualStyle = isBusy ? 'opacity: 0.5; cursor: not-allowed;' : 'opacity: 1; cursor: text;';
+    
     const btnText = isBusy ? `🛑 Stop` : `➤ Send`;
-    const btnActionStyle = isBusy 
-        ? `data-on-click="stopTask" style="flex: 0.8; background: var(--ls-error-background-color, #ff4d4f); border: 1px solid var(--ls-border-color); border-radius: 6px; color: white; cursor: pointer; font-weight: bold;"` 
+    const btnActionStyle = isBusy
+        ? `data-on-click="stopTask" style="flex: 0.8; background: var(--ls-error-background-color, #ff4d4f); border: 1px solid var(--ls-border-color); border-radius: 6px; color: white; cursor: pointer; font-weight: bold;"`
         : `data-on-click="sendMsg" style="flex: 0.8; background: var(--ls-quaternary-background-color); border: 1px solid var(--ls-border-color); border-radius: 6px; opacity: 0.9; cursor: pointer; font-weight: bold;"`;
 
     return `
     <div style="padding: 12px; background: var(--ls-secondary-background-color); border-top: 1px solid var(--ls-border-color);">
         <textarea id="ai-sidebar-textarea" rows="2" placeholder="${placeholderText}" 
-            style="width: 100%; background: var(--ls-primary-background-color); color: var(--ls-primary-text-color); border: 1px solid var(--ls-border-color); border-radius: 6px; padding: 10px; font-size: 13px; resize: none; outline: none; margin-bottom: 8px; box-sizing: border-box;" 
+            style="width: 100%; background: var(--ls-primary-background-color); color: var(--ls-primary-text-color); border: 1px solid var(--ls-border-color); border-radius: 6px; padding: 10px; font-size: 13px; resize: none; outline: none; margin-bottom: 8px; box-sizing: border-box; ${visualStyle}" 
             ${disabledAttr}></textarea>
         
         <div style="display: flex; gap: 6px;">
-            <button data-on-click="clearChat" class="ai-btn-action" style="flex: 1; padding: 6px 2px; opacity: 0.7; border: 1px solid var(--ls-border-color); border-radius: 6px; cursor: pointer;" ${disabledAttr}>🧹 Clear</button>
+            <button data-on-click="clearChat" class="ai-btn-action" style="flex: 1; padding: 6px 2px; opacity: 0.7; border: 1px solid var(--ls-border-color); border-radius: 6px; cursor: pointer;">🧹 Clear</button>
             <button data-on-click="exportChat" class="ai-btn-action" style="flex: 1; padding: 6px 2px; opacity: 0.7; border: 1px solid var(--ls-border-color); border-radius: 6px; cursor: pointer;">📤 Export</button>
             <button ${btnActionStyle}>${btnText}</button>
         </div>

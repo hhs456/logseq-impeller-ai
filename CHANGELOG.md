@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-07-18
+
+### Added
+- **Customizable Iteration Limit**: Added a `maxIterations` option within the settings page, empowering users to freely adjust the maximum number of AI iterations based on their specific needs.
+
+### Fixed
+- **Page Navigation**: Resolved an execution issue with the `openPage` function, ensuring smooth and reliable target page loading.
+- **UI Rendering Stability**: Optimized the sidebar rendering mechanism to eliminate visual flickering during content updates and ensures consistent input focus.
+
 ## [0.9.0] - 2026-07-08
 
 ### Added

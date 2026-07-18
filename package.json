@@ -1,6 +1,6 @@
 {
   "name": "logseq-impeller-ai",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "type": "module",
   "description": "A universal, LLM-agnostic sidebar assistant for Logseq. Features a native sidebar interface, smart 'Apply' logic for refactoring or appending ideas, and task cancellation control.",
   "main": "dist/index.html",

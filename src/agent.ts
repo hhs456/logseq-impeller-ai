@@ -39,7 +39,9 @@ export const agent = {
         let currentMessages: any[] = [...messages];
         let iterations = 0;
         // 1️⃣ 放寬限制：把 3 次提高到 7 次或 10 次，讓 Agent 有足夠的空間去翻找程式碼
-        const maxIterations = 7;
+         
+        // 💡 1️⃣ 這裡改成動態從設定讀取 (運用 ?? 防止設定失效時報錯)
+        const maxIterations: number  = logseq.settings?.maxIterations as number ?? 7;
 
         try {
             const { apiKey, model, basePath } = logseq.settings!;
@@ -73,7 +75,14 @@ export const agent = {
                 console.log(`[第 ${iterations} 次請求] 模型的回覆:`, message);
 
                 if (!message) {
-                    console.error("OpenRouter 回傳異常:", data);
+                    // 1. 在 Console 印出完整的 Object 方便除錯
+                    console.error("OpenRouter 回傳異常詳細資料:", data);
+                    
+                    // 2. 嘗試從 OpenRouter 的標準錯誤格式中提取確切的錯誤訊息
+                    const errMsg = data.error?.message || data.error || JSON.stringify(data);
+                    
+                    // 3. 在畫面上顯示給使用者看，避免無聲無息地失敗
+                    logseq.UI.showMsg(`API 拒絕請求: ${errMsg}`, 'error');
                     return null;
                 }
 

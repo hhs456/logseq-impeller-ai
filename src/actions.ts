@@ -177,12 +177,25 @@ export const actions = {
         }
     },
     openPage: async (e: any) => {
-        // 從我們上面設定的 data-page-name 取得頁面名稱
-        const pageName = e.dataset.pageName;
+        const pageName = e?.dataset?.pageName;
+        if (!pageName) return;
 
-        if (pageName) {
-            // 利用 Logseq API 執行頁面跳轉
+        try {
+            // 🔍 核心安全防禦：先檢查頁面是否存在
+            const page = await logseq.Editor.getPage(pageName);
+            
+            if (!page) {
+                // 🛑 攔截！不讓 Logseq 自動建立垃圾空白頁
+                logseq.UI.showMsg(`⚠️ 頁面 [[${pageName}]] 還沒有被建立喔！`, 'warning');
+                return;
+            }
+
+            // ✅ 存在才執行官方跳轉
             await logseq.App.pushState('page', { name: pageName });
+            
+        } catch (err) {
+            console.error('導航至頁面失敗:', err);
+            logseq.UI.showMsg('❌ 無法跳轉至該頁面', 'error');
         }
     },
 };

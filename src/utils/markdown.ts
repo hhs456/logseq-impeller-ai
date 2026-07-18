@@ -21,18 +21,21 @@ export function escapeHTML(str: string): string {
 export function renderMarkdown(text: string): string {
     if (!text) return '';
     
-    // 預處理 Logseq 的 <span class="logseq-page-ref" data-on-click="openPage" data-page-name="頁面連結">頁面連結</span> 語法
-    const processedText = text.replace(/\[\[(.*?)\]\]/g, '<span class="logseq-page-ref">$1</span>');
+    // 💡 核心修正：直接在預處理階段，將 [[頁面]] 一步到位轉成符合你新架構的通用安全連結
+    const processedText = text.replace(
+        /\[\[(.*?)\]\]/g, 
+        '<a class="ai-chat-wiki-link" data-on-click="openPage" data-page-name="$1" style="color: var(--ls-link-text-color); cursor: pointer; text-decoration: underline; font-weight: 500;">[[$1]]</a>'
+    );
     
-    // 💡 1. 建立自訂的 Renderer     
+    // 1. 建立自訂的 Renderer     
     const renderer = new marked.Renderer();
     
-    // 💡 注意這裡：原本的 function(code, language) 改成解構單一物件 { text, lang }
+    // 注意這裡：原本的 function(code, language) 改成解構單一物件 { text, lang }
     renderer.code = function({ text, lang }) {
         // 如果沒有指定語言，預設為空字串
-        const language = lang || ''; 
+        const language = lang || '';  
         // 將程式碼內容進行 URL 編碼，避免破壞 HTML 屬性結構
-        const encodedCode = encodeURIComponent(text);
+        const encodedCode = encodeURIComponent(text); 
         
         return `
         <div style="position: relative; margin-bottom: 1em;">
@@ -43,28 +46,28 @@ export function renderMarkdown(text: string): string {
                     data-code="${encodedCode}">📋 Copy</button>
             <pre><code class="language-${language}">${escapeHTML(text)}</code></pre>
         </div>
-        `;
+        `; 
     };
 
-    // 💡 2. 套用自訂 Renderer 將 Markdown 解析為 HTML 字串
-    const rawHtml = marked.parse(processedText, {
-        renderer: renderer,
-        gfm: true,
-        breaks: true
-    }) as string;
+    // 2. 套用自訂 Renderer 將 Markdown 解析為 HTML 字串
+    const rawHtml = marked.parse(processedText, { 
+        renderer: renderer, 
+        gfm: true, 
+        breaks: true 
+    }) as string; 
 
-    // 💡 3. 重點：必須在 DOMPurify 的白名單加入 data-on-click 和 data-code
-    const safeHtml = DOMPurify.sanitize(rawHtml, {
-        ALLOWED_TAGS: [
-            'b', 'i', 'em', 'strong', 'a', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
-            'ul', 'ol', 'li', 'code', 'pre', 'blockquote', 'table', 'thead', 'tbody', 
-            'tr', 'th', 'td', 'br', 'span', 'div', 'input', 'button' // 👈 允許 'button'
+    // 3. 重點：除了 data-on-click 和 data-code，必須額外在白名單加入 'data-page-name' 屬性
+    const safeHtml = DOMPurify.sanitize(rawHtml, { 
+        ALLOWED_TAGS: [ 
+            'b', 'i', 'em', 'strong', 'a', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',  
+            'ul', 'ol', 'li', 'code', 'pre', 'blockquote', 'table', 'thead', 'tbody',  
+            'tr', 'th', 'td', 'br', 'span', 'div', 'input', 'button' 
         ], 
-        ALLOWED_ATTR: [
-            'href', 'target', 'class', 'style', 'type', 'checked', 
-            'data-on-click', 'data-code' // 👈 允許自訂事件屬性
+        ALLOWED_ATTR: [ 
+            'href', 'target', 'class', 'style', 'type', 'checked',  
+            'data-on-click', 'data-code', 'data-page-name' 
         ]
     });
     
-    return safeHtml;
+    return safeHtml; 
 }
