@@ -7,41 +7,122 @@ import { buildSystemPrompt } from './prompts';
 import { MemoryManager } from './memory';
 import { getAvailableTools, executeToolCall } from './tools';
 
+// ─────────────────────────────────────────────
+// 【最佳化 1】：常數集中管理，避免魔術數字散落各處
+// ─────────────────────────────────────────────
+const DEFAULT_MAX_ITERATIONS = 7;
+const REGENERATE_HISTORY_LIMIT = 12; // 與 buildApiPayload 預設值對齊，方便日後統一調整
 
-// 在 agent 物件外部新增輔助函式
-const getTxt = (tree: any[]): string => tree.reduce((acc, b) => acc + b.content + '\n' + (b.children ? getTxt(b.children) : ''), '');
+// ─────────────────────────────────────────────
+// 【最佳化 2】：強化型別安全，以 null 合併取代 undefined 字串污染
+// ─────────────────────────────────────────────
+const getTxt = (tree: any[]): string =>
+    tree.reduce(
+        (acc, b) => acc + (b.content ?? '') + '\n' + (b.children ? getTxt(b.children) : ''),
+        ''
+    );
+
+// ─────────────────────────────────────────────
+// 【最佳化 3】：頁面內容截斷保護，防止超長頁面耗盡 Token
+// ─────────────────────────────────────────────
+const MAX_PAGE_CHARS = 12000;
 
 async function buildPageContextPrompt(pageUuid: string): Promise<string> {
     const blocks = await logseq.Editor.getPageBlocksTree(pageUuid);
     const system = buildSystemPrompt({ langName: state.t.langName, isWritingToPage: false });
-    const pageName = state.chatStore[pageUuid]?.name || "Unknown Page";
-    // 統一格式
-    return `${system}\n\n【Page Name】: ${pageName}\n\n【Page Content】:\n${getTxt(blocks)}`;
+    const pageName = state.chatStore[pageUuid]?.name ?? "Unknown Page";
+
+    let pageContent = getTxt(blocks);
+
+    // 若頁面內容超出上限，截斷並附上提示，避免 Token 爆炸
+    if (pageContent.length > MAX_PAGE_CHARS) {
+        pageContent =
+            pageContent.slice(0, MAX_PAGE_CHARS) +
+            `\n\n... [⚠️ 頁面內容過長，已自動截斷，僅保留前 ${MAX_PAGE_CHARS} 字元]`;
+    }
+
+    return `${system}\n\n【Page Name】: ${pageName}\n\n【Page Content】:\n${pageContent}`;
 }
 
+// ─────────────────────────────────────────────
+// 【維持原有】：背景頁面完成通知
+// ─────────────────────────────────────────────
 function showBackgroundCompletionMsg(pageUuid: string) {
     if (state.currentPageUuid !== pageUuid) {
-        const finishedPageName = state.chatStore[pageUuid]?.name || state.t.bgPage;
+        const finishedPageName = state.chatStore[pageUuid]?.name ?? state.t.bgPage;
         logseq.UI.showMsg(state.t.bgChatDone.replace('{name}', finishedPageName), 'success');
     }
 }
 
+// ─────────────────────────────────────────────
+// 【最佳化 4】：工具呼叫處理獨立為函式，降低 ask() 複雜度
+// ─────────────────────────────────────────────
+async function handleToolCall(toolCall: any): Promise<any> {
+    try {
+        const args = JSON.parse(toolCall.function.arguments);
+        const toolResultString = await executeToolCall(toolCall.function.name, args);
+        return {
+            role: "tool",
+            tool_call_id: toolCall.id,
+            name: toolCall.function.name,
+            content: toolResultString,
+        };
+    } catch {
+        return {
+            role: "tool",
+            tool_call_id: toolCall.id,
+            name: toolCall.function.name,
+            content: JSON.stringify({ error: "工具執行失敗或參數解析錯誤" }),
+        };
+    }
+}
+
+// ─────────────────────────────────────────────
+// 【最佳化 5】：中止時的摘要報告獨立為函式，降低 catch 區塊複雜度
+// ─────────────────────────────────────────────
+function buildAbortSummary(currentMessages: any[]): string {
+    let summary = "";
+    for (const m of currentMessages) {
+        if (m.role === 'assistant' && m.tool_calls) {
+            for (const tc of m.tool_calls) {
+                try {
+                    const args = JSON.parse(tc.function.arguments);
+                    const q = args.query ?? args.target_page ?? "執行中";
+                    summary += `🛠️ *[系統] 觸發工具 (${tc.function.name})： "${q}"...*\n`;
+                } catch {
+                    summary += `🛠️ *[系統] 觸發工具 (${tc.function.name})...*\n`;
+                }
+            }
+        }
+        if (m.role === 'tool') {
+            summary += `✅ *[系統] 工具執行完成，已取得資料。*\n`;
+        }
+    }
+    summary += `\n🛑 **[對話已被使用者終止]**`;
+    return summary;
+}
+
+// ─────────────────────────────────────────────
+// 主要 agent 物件
+// ─────────────────────────────────────────────
 export const agent = {
+
     stopTask() {
-        if (state.abortController) state.abortController.abort();
+        state.abortController?.abort();
     },
 
-    async ask(messages: any[], useNotification = false) {
+    async ask(messages: any[], useNotification = false): Promise<string | null> {
         state.isBusy = true;
         state.abortController = new AbortController();
         if (useNotification) startBusyFeedback();
         renderUI();
+
         let currentMessages: any[] = [...messages];
         let iterations = 0;
-        // 1️⃣ 放寬限制：把 3 次提高到 7 次或 10 次，讓 Agent 有足夠的空間去翻找程式碼
-         
-        // 💡 1️⃣ 這裡改成動態從設定讀取 (運用 ?? 防止設定失效時報錯)
-        const maxIterations: number  = logseq.settings?.maxIterations as number ?? 7;
+
+        // 【最佳化 6】：從設定動態讀取，並以常數作 fallback，防止設定失效
+        const maxIterations: number =
+            (logseq.settings?.maxIterations as number) ?? DEFAULT_MAX_ITERATIONS;
 
         try {
             const { apiKey, model, basePath } = logseq.settings!;
@@ -66,7 +147,7 @@ export const agent = {
                         "X-Title": "Impeller AI: Universal LLM Sidebar",
                     },
                     body: JSON.stringify(requestBody),
-                    signal: state.abortController.signal
+                    signal: state.abortController.signal,
                 });
 
                 const data = await response.json();
@@ -75,92 +156,64 @@ export const agent = {
                 console.log(`[第 ${iterations} 次請求] 模型的回覆:`, message);
 
                 if (!message) {
-                    // 1. 在 Console 印出完整的 Object 方便除錯
                     console.error("OpenRouter 回傳異常詳細資料:", data);
-                    
-                    // 2. 嘗試從 OpenRouter 的標準錯誤格式中提取確切的錯誤訊息
-                    const errMsg = data.error?.message || data.error || JSON.stringify(data);
-                    
-                    // 3. 在畫面上顯示給使用者看，避免無聲無息地失敗
+                    const errMsg = data.error?.message ?? data.error ?? JSON.stringify(data);
                     logseq.UI.showMsg(`API 拒絕請求: ${errMsg}`, 'error');
                     return null;
                 }
 
-                if (message.tool_calls && message.tool_calls.length > 0) {
+                // 模型要求使用工具
+                if (message.tool_calls?.length > 0) {
                     currentMessages.push(message);
 
-                    for (const toolCall of message.tool_calls) {
-                        try {
-                            const args = JSON.parse(toolCall.function.arguments);
-                            const toolResultString = await executeToolCall(toolCall.function.name, args);
+                    // 【最佳化 7】：工具呼叫改為平行執行，加速多工具情境
+                    const toolResults = await Promise.all(
+                        message.tool_calls.map((tc: any) => handleToolCall(tc))
+                    );
+                    currentMessages.push(...toolResults);
 
-                            currentMessages.push({
-                                role: "tool",
-                                tool_call_id: toolCall.id,
-                                name: toolCall.function.name,
-                                content: toolResultString
-                            });
-                            renderUI();
-                        } catch (err) {
-                            currentMessages.push({
-                                role: "tool",
-                                tool_call_id: toolCall.id,
-                                name: toolCall.function.name,
-                                content: JSON.stringify({ error: "工具執行失敗或參數解析錯誤" })
-                            });
-                        }
-                    }
+                    // 【最佳化 8】：工具執行完畢後立即刷新 UI，提升即時回饋感
+                    renderUI();
                     iterations++;
                     continue;
                 }
 
+                // 模型回傳最終文字答案，直接返回
                 return message.content;
             }
 
-            // 2️⃣ 防呆機制：如果迴圈跑完還是沒結果，不要 return null，而是回傳一段系統警告！
+            // 【維持原有】：防呆攔截，達到最大迭代次數時的友善提示
             console.warn(`[Agent] ⚠️ 已達到最大思考次數限制 (${maxIterations}次)，強制暫停以避免無窮迴圈。`);
-            return `⚠️ **[系統攔截]** 思考程序已達到上限 (${maxIterations} 次)。\n這通常是因為您要求的檔案或程式碼結構太過龐大，導致我需要不斷反覆搜尋。\n\n**目前的進度已保留，請嘗試：**\n1. 縮小您的問題範圍\n2. 直接指明要查詢的特定函數或段落`;
+            return (
+                `⚠️ **[系統攔截]** 思考程序已達到上限 (${maxIterations} 次)。\n` +
+                `這通常是因為您要求的檔案或程式碼結構太過龐大，導致我需要不斷反覆搜尋。\n\n` +
+                `**目前的進度已保留，請嘗試：**\n` +
+                `1. 縮小您的問題範圍\n` +
+                `2. 直接指明要查詢的特定函數或段落`
+            );
 
         } catch (e: any) {
             if (e.name === 'AbortError') {
                 console.log("偵測到使用者終止任務，正在保留目前的工具執行與對話歷程...");
 
-                let abortSummary = "";
-
-                for (const m of currentMessages) {
-                    if (m.role === 'assistant' && m.tool_calls) {
-                        for (const tc of m.tool_calls) {
-                            try {
-                                const args = JSON.parse(tc.function.arguments);
-                                const q = args.query || args.target_page || "執行中";
-                                abortSummary += `🛠️ *[系統] 觸發工具 (${tc.function.name})： "${q}"...*\n`;
-                            } catch {
-                                abortSummary += `🛠️ *[系統] 觸發工具 (${tc.function.name})...*\n`;
-                            }
-                        }
-                    }
-                    if (m.role === 'tool') {
-                        abortSummary += `✅ *[系統] 工具執行完成，已取得資料。*\n`;
-                    }
-                }
-
-                abortSummary += `\n🛑 **[對話已被使用者終止]**`;
+                // 【最佳化 5】：摘要報告由獨立函式產生
+                const abortSummary = buildAbortSummary(currentMessages);
 
                 if (!state.processingPageUuid && state.currentPageUuid) {
                     const currentData = state.chatStore[state.currentPageUuid];
                     if (currentData) {
                         currentData.msgs.push({ role: "assistant", content: abortSummary });
-                        // 💡 修改：被強制中止後產生的報告也需要存起來
                         MemoryManager.saveHistory(state.currentPageUuid);
                     }
                 }
 
                 logseq.UI.showMsg(state.t.aborted, 'warning');
                 return abortSummary;
-            } else {
-                logseq.UI.showMsg(state.t.error + e.message, 'error');
-                return null;
             }
+
+            logseq.UI.showMsg(state.t.error + e.message, 'error');
+            return null;
+
         } finally {
             state.isBusy = false;
             state.abortController = null;
@@ -179,24 +232,28 @@ export const agent = {
         state.chatStore[targetUuid].msgs.push({
             role: "user",
             content: state.tempInput,
-            timestamp: Date.now()  // 💡 新增時間戳記
+            timestamp: Date.now(),
         });
         state.tempInput = "";
 
-        await MemoryManager.compressIfNeeded(targetUuid, agent.ask.bind(this));
+        await MemoryManager.compressIfNeeded(targetUuid, agent.ask.bind(agent));
 
         const promptWithContext = await buildPageContextPrompt(targetUuid);
         const recentHistory = MemoryManager.buildApiPayload(targetUuid);
 
         const res = await agent.ask([
             { role: "system", content: promptWithContext },
-            ...recentHistory
-        ], false);
+            ...recentHistory,
+        ]);
 
         if (res) {
-            state.chatStore[targetUuid].msgs.push({ role: "assistant", content: res, timestamp: Date.now() });
+            state.chatStore[targetUuid].msgs.push({
+                role: "assistant",
+                content: res,
+                timestamp: Date.now(),
+            });
             MemoryManager.saveHistory(targetUuid);
-            showBackgroundCompletionMsg(targetUuid); // 共用通知
+            showBackgroundCompletionMsg(targetUuid);
             renderUI();
         }
     },
@@ -205,8 +262,6 @@ export const agent = {
         const msgIndex = parseInt(e.dataset.index, 10);
         const pageUuid = state.currentPageUuid;
         if (!pageUuid || state.isBusy) return;
-
-        // 💡 1. 補上重新生成的 I18N 防呆
         if (!confirm(state.t.confirmRegenerate)) return;
 
         state.processingPageUuid = pageUuid;
@@ -218,35 +273,44 @@ export const agent = {
             return;
         }
 
+        // 備份原有訊息，以防重新生成失敗時還原
         const originalBackup = msgs.slice(msgIndex);
         state.chatStore[pageUuid].msgs = msgs.slice(0, msgIndex);
 
         let success = false;
 
         try {
-            // 💡 2. 使用 buildApiPayload 來節省 Token，而不是把整坨 msgs 丟過去
             const promptWithContext = await buildPageContextPrompt(pageUuid);
-            const apiPayload = MemoryManager.buildApiPayload(pageUuid, 12);
 
-            const res = await agent.ask([
-                { role: "system", content: promptWithContext },
-                ...apiPayload
-            ], true);
+            // 【最佳化 9】：使用常數取代硬編碼的 12，與 sendMsg 行為統一
+            const apiPayload = MemoryManager.buildApiPayload(pageUuid, REGENERATE_HISTORY_LIMIT);
+
+            const res = await agent.ask(
+                [{ role: "system", content: promptWithContext }, ...apiPayload],
+                true
+            );
 
             if (res) {
-                state.chatStore[pageUuid].msgs.push({ role: "assistant", content: res, timestamp: Date.now() });
+                state.chatStore[pageUuid].msgs.push({
+                    role: "assistant",
+                    content: res,
+                    timestamp: Date.now(),
+                });
                 success = true;
                 MemoryManager.saveHistory(pageUuid);
-                showBackgroundCompletionMsg(pageUuid); // 共用通知
+                showBackgroundCompletionMsg(pageUuid);
             }
         } catch (err) {
             console.error("重新生成失敗:", err);
         } finally {
             if (!success) {
-                state.chatStore[pageUuid].msgs = state.chatStore[pageUuid].msgs.slice(0, msgIndex);
-                state.chatStore[pageUuid].msgs.push(...originalBackup);
+                // 還原至備份
+                state.chatStore[pageUuid].msgs = [
+                    ...state.chatStore[pageUuid].msgs.slice(0, msgIndex),
+                    ...originalBackup,
+                ];
             }
             renderUI();
         }
-    }
+    },
 };

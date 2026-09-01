@@ -106,19 +106,7 @@ export function renderUI() {
                     historyElAfter.scrollTop = historyElAfter.scrollHeight;
                 } else {
                     historyElAfter.scrollTop = savedScrollTop;
-                }
-                
-                // 由於舊的歷史 DOM 剛剛被我們抽換掉了，雙鏈點擊事件必須重新掛載給新的 DOM
-                historyElAfter.onclick = async (e: any) => {
-                    const wikiLink = e.target.closest('a[data-on-click="openPage"]');
-                    const pageLink = e.target.closest('.ai-chat-page-link');
-                    const targetEl = wikiLink || pageLink;
-                    if (targetEl) {
-                        e.preventDefault();
-                        e.stopPropagation(); 
-                        await actions.openPage({ dataset: { pageName: targetEl.getAttribute('data-page-name') } });
-                    }
-                };
+                }                
             }
         }
 

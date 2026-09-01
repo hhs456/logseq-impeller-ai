@@ -1,6 +1,6 @@
 # 🌀 Impeller AI
 
-![Version](https://img.shields.io/badge/version-v0.9.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.9.2-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Logseq](https://img.shields.io/badge/Logseq-Plugin-0f172a?logo=logseq)
 
@@ -53,6 +53,7 @@ Impeller AI deeply integrates with Logseq's block ecosystem. It is not just a ch
 * **Dynamic Tool Calling (Up to 7 Iterations)**: Powered by a robust reasoning loop (`maxIterations: 7`). The AI autonomously decides when to trigger `semantic_search` (local vector base), global keyword queries (Datalog), or `web_search`.
 * **Strict Anti-Hallucination**: System prompts force the AI to use `web_search` for current affairs and append a mandatory "Sources" citation section, strictly separating facts from inferences.
 * **Incremental RAG & IndexedDB Cache**: Built on Orama and Transformers.js (`bge-small-zh-v1.5`). Vector embeddings are persistently cached in IndexedDB (`ImpellerRAG_Cache`). Startup performs a lightning-fast background diff-sync, updating only newly modified blocks.
+* **Full-Graph Semantic Scanning**: The RAG indexing pipeline now scans every non-empty block across the entire graph, removing the legacy filter that restricted embedding to blocks containing `[[wiki-links]]` or `#tags`. This ensures comprehensive semantic coverage for knowledge retrieval.
 
 ### 🌳 Native Block & Context Processing
 * **AST-to-Nested Blocks**: Bypasses plain text limitations. An internal AST parser (`parseMarkdownToTree`) converts AI Markdown directly into Logseq's native nested parent-child blocks. It also auto-prepends a horizontal divider and custom tag (e.g., `--- \n#AI`) for visual cleanliness.

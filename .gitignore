@@ -15,5 +15,7 @@ node_modules/
 dist-ssr/
 *.local
 
+package-lock.json
+
 # --- Logseq 產生的暫存檔 ---
 .logseq/
