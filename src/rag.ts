@@ -35,6 +35,7 @@ async function getCachedEmbedding(key: string): Promise<number[] | null> {
         const req = tx.objectStore(STORE_NAME).get(key);
         req.onsuccess = () => resolve(req.result ? req.result : null);
         req.onerror = () => resolve(null);
+        tx.oncomplete = () => db.close();
     });
 }
 
@@ -45,9 +46,17 @@ async function saveCachedEmbeddings(entries: [string, number[]][]): Promise<void
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
         entries.forEach(([key, val]) => store.put(val, key));
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
     });
+}
+
+async function computeContentHash(content: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(content);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
 }
 
 // ==========================================
@@ -62,8 +71,6 @@ export async function fetchLogseqBlocks() {
     try {
         const results = await logseq.DB.datascriptQuery(query);
         const blocks = results.flat()
-            .filter((block: any) => block.content.includes('[[') || block.content.includes('#'))
-            // 🎯 已經移除 .slice(0, 500)，正式解除封印，掃描全圖譜！
             .map((block: any) => {
                 const pageName = block.page?.['original-name'] || block.page?.name || "未命名頁面";
                 return {
@@ -97,10 +104,9 @@ export async function syncVectorDB() {
         const processedBlocks = [];
         const blocksToVectorize = [];
 
-        // 🎯 差異比對 (Diffing)：去 IndexedDB 查水表
         for (const block of blocks) {
-            // 用圖譜名、UUID與內容組成絕對唯一的 Key。只要內容改了哪怕一個字，Key 就會變！
-            const cacheKey = `${graphName}_${block.id}_${block.content}`;
+            const contentHash = await computeContentHash(block.content);
+            const cacheKey = `${graphName}_${block.id}_${contentHash}`;
             const cachedEmbedding = await getCachedEmbedding(cacheKey);
 
             if (cachedEmbedding) {
@@ -136,7 +142,7 @@ export async function syncVectorDB() {
                 processedBlocks.push({ ...block, embedding });
                 
                 // 記錄進快取準備清單
-                const cacheKey = `${graphName}_${block.id}_${block.content}`;
+                const cacheKey = `${graphName}_${block.id}_${await computeContentHash(block.content)}`;
                 newEntries.push([cacheKey, embedding]);
             }
 
@@ -188,7 +194,7 @@ export async function searchSimilarBlocks(queryText: string) {
 
 export async function getLinkedReferencesForPage(targetPage: string) {
     try {
-        const lowerPageName = targetPage.toLowerCase().replace(/^#/, ''); 
+        const lowerPageName = targetPage.toLowerCase().replace(/^#/, '').replace(/\\/g, '\\\\').replace(/"/g, '\\"'); 
         const linkedRefsQuery = `
             [:find (pull ?b [:block/content {:block/page [:block/original-name]}])
              :where [?p :block/name "${lowerPageName}"]

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.9.3] - 2026-09-01
+
+### Changed
+- **Codebase Modularization**: Extracted i18n dictionary, clipboard utilities, logger, and shared markdown helpers into dedicated modules (`src/i18n.ts`, `src/utils/clipboard.ts`, `src/utils/logger.ts`, `src/utils/markdown.ts`).
+- **Type Safety**: Replaced loose `any[]` tool call types with strict `ToolCall` / `ToolCallFunction` interfaces.
+- **RAG Cache Optimization**: Replaced raw-content cache keys with SHA-256 content hashes for more reliable embedding invalidation.
+
+### Fixed
+- **AbortController State**: Fixed nested agent calls clobbering the abort controller by saving/restoring the previous reference.
+- **Datalog Injection Safety**: Added proper escaping for user-supplied keywords in Datalog queries (`tools.ts`, `rag.ts`).
+- **IndexedDB Connection Leak**: Ensured DB connections are properly closed after read/write transactions.
+- **Tab Indentation Parsing**: Normalized tab characters to spaces before computing block indentation depth in the write engine.
+
 # [0.9.2] - 2026-09-01
 
 ### Added

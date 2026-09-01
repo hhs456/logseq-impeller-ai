@@ -2,6 +2,8 @@
 import '@logseq/libs';
 import { state } from './config';
 import { writeToLogseq } from './engine';
+import { getTxt } from './utils/markdown';
+import { copyToClipboard } from './utils/clipboard';
 import { buildSystemPrompt } from './prompts';
 import { MemoryManager } from './memory';
 import { agent } from './agent';
@@ -61,9 +63,9 @@ export const actions = {
 
     // 💡 2. 新增：專門處理主動切換圖表事件的監聽回呼
     async handleGraphChange() {
-        const newFingerprint = await MemoryManager.getGraphPrefix();
-        console.log("[Actions] 偵測到 Logseq 圖表切換，正在進行記憶庫沙盒隔離...");
-        console.log("[Actions] 當前圖表指紋:", newFingerprint);
+        const newFingerprint = MemoryManager.getGraphPrefix();
+        console.log("[Actions] Graph switch detected, sandboxing memory...");
+        console.log("[Actions] Current graph fingerprint:", newFingerprint);
 
         // 💡 核心修正：即便 path 字串不同，只要指紋計算結果不同，就觸發強制重置
         if (state.currentGraphPath !== newFingerprint) {
@@ -94,7 +96,6 @@ export const actions = {
         const chatHistory = state.chatStore[targetUuid]?.msgs || [];
 
         const blocks = await logseq.Editor.getPageBlocksTree(targetUuid);
-        const getTxt = (tree: any[]): string => tree.reduce((acc, b) => acc + b.content + '\n' + (b.children ? getTxt(b.children) : ''), '');
         const originalContent = getTxt(blocks);
 
         if (!originalContent.trim()) {
@@ -137,39 +138,8 @@ export const actions = {
         const rawCode = e.dataset.code;
         if (rawCode) {
             try {
-                // 將內容反向解碼
                 const decodedCode = decodeURIComponent(rawCode);
-
-                // 優先使用 parent 的剪貼簿 API，因為 parent 主視窗才擁有系統焦點
-                try {
-                    await window.parent.navigator.clipboard.writeText(decodedCode);
-                    logseq.UI.showMsg('✅ 程式碼已複製至剪貼簿！', 'success');
-                } catch (err) {
-                    // Fallback 降級處理 (建立隱藏的 textarea 並使用 execCommand 強制複製)
-                    const textArea = window.parent.document.createElement("textarea");
-                    textArea.value = decodedCode;
-                    textArea.style.position = "fixed";
-                    textArea.style.opacity = "0";
-
-                    window.parent.document.body.appendChild(textArea);
-                    textArea.focus();
-                    textArea.select();
-
-                    try {
-                        const successful = window.parent.document.execCommand('copy');
-                        window.parent.document.body.removeChild(textArea);
-
-                        if (successful) {
-                            logseq.UI.showMsg('✅ 程式碼已複製至剪貼簿！(降級模式)', 'success');
-                        } else {
-                            throw new Error('execCommand returned false');
-                        }
-                    } catch (fallbackErr) {
-                        window.parent.document.body.removeChild(textArea);
-                        console.error('複製程式碼完全失敗:', err, fallbackErr);
-                        logseq.UI.showMsg('❌ 複製失敗，剪貼簿遭到系統底層封鎖', 'error');
-                    }
-                }
+                await copyToClipboard(decodedCode, '✅ 程式碼已複製至剪貼簿！');
             } catch (err) {
                 console.error('Decode failed:', err);
                 logseq.UI.showMsg('❌ 解碼失敗', 'error');

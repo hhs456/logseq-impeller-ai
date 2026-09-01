@@ -15,6 +15,13 @@ export function escapeHTML(str: string): string {
         .replace(/'/g, '&#039;');
 }
 
+export function getTxt(tree: any[]): string {
+    return tree.reduce(
+        (acc: string, b: any) => acc + (b.content ?? '') + '\n' + (b.children ? getTxt(b.children) : ''),
+        ''
+    );
+}
+
 /**
  * 將 Markdown 轉換為安全的 HTML，包含 Logseq 特殊語法與自訂程式碼區塊
  */

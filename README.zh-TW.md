@@ -1,6 +1,6 @@
 # 🌀 Impeller AI
 
-![Version](https://img.shields.io/badge/version-v0.9.2-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.9.3-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Logseq](https://img.shields.io/badge/Logseq-Plugin-0f172a?logo=logseq)
 
@@ -52,7 +52,7 @@ Impeller AI 深度整合了 Logseq 的區塊（Block）生態系統。它不僅�
 * **動態工具呼叫（最高 7 次迭代）**：由強大的推理迴圈驅動（`maxIterations: 7`）。AI 可自主決定何時觸發 `semantic_search`（本地向量庫檢索）、全域關鍵字查詢（Datalog）或 `web_search`（網路搜尋）。
 * **嚴格防幻覺機制**：系統提示詞會強制 AI 在處理時事時使用 `web_search`，並強制附加「參考來源 (Sources)」區塊，嚴格區分客觀事實與 AI 推論。
 * **增量 RAG 與 IndexedDB 快取**：基於 Orama 與 Transformers.js（`bge-small-zh-v1.5` 嵌入模型）建構。向量資料（Embeddings）會持久化快取於 IndexedDB（`ImpellerRAG_Cache`）中。啟動時會在背景執行極速的差異同步，僅針對近期修改過的區塊進行更新。
-* **全圖譜語意掃描：RAG 索引管線現在會掃描整個知識圖譜中所有非空區塊，移除了既往僅將向量嵌入限制在包含 [[wiki-links]] 或 #tags 的過濾機制。這確保了知識檢索的全面性與語意覆蓋範圍。
+* **全圖譜語意掃描**：RAG 索引管線現在會掃描整個知識圖譜中所有非空區塊，移除了既往僅將向量嵌入限制在包含 [[wiki-links]] 或 #tags 的過濾機制。這確保了知識檢索的全面性與語意覆蓋範圍。
 
 ### 🌳 原生區塊與上下文處理
 * **AST 轉巢狀區塊**：突破純文字限制。內部的 AST 解析器（`parseMarkdownToTree`）能將 AI 生成的 Markdown 直接轉換為 Logseq 原生的巢狀父子區塊。它還會自動在區塊前加上水平分隔線與自訂標籤（例如 `--- \n#AI`）以保持層級視覺的整潔。

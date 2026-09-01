@@ -1,6 +1,7 @@
 // src/tools.ts
 import '@logseq/libs';
 import { searchSimilarBlocks, getLinkedReferencesForPage } from './rag';
+import { getTxt } from './utils/markdown';
 
 /**
  * 1. 工具註冊中心 (Tool Registry)
@@ -181,7 +182,6 @@ async function executeReadTargetBlock(uuid: string): Promise<string> {
     const block = await logseq.Editor.getBlock(uuid, { includeChildren: true });
     if (!block) return JSON.stringify({ error: "找不到此區塊，可能已被刪除。" });
 
-    const getTxt = (tree: any[]): string => tree.reduce((acc, b) => acc + b.content + '\n' + (b.children ? getTxt(b.children) : ''), '');
     const totalContent = block.content + '\n' + (block.children ? getTxt(block.children) : '');
 
     return totalContent;
@@ -225,11 +225,12 @@ export async function executeWebSearch(query: string) {
 // 修改後的全域搜尋實作
 export async function executeGlobalKeywordSearch(keyword: string): Promise<string> {
     try {
+        const escapedKeyword = keyword.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
         const query = `
             [:find (pull ?b [*])
              :where
              [?b :block/content ?c]
-             [(clojure.string/includes? ?c "${keyword}")]]
+             [(clojure.string/includes? ?c "${escapedKeyword}")]]
         `;
         const results = await logseq.DB.datascriptQuery(query);
 

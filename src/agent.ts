@@ -6,25 +6,14 @@ import { renderUI } from './ui';
 import { buildSystemPrompt } from './prompts';
 import { MemoryManager } from './memory';
 import { getAvailableTools, executeToolCall } from './tools';
+import { getTxt } from './utils/markdown';
 
 // ─────────────────────────────────────────────
 // 【最佳化 1】：常數集中管理，避免魔術數字散落各處
 // ─────────────────────────────────────────────
 const DEFAULT_MAX_ITERATIONS = 7;
-const REGENERATE_HISTORY_LIMIT = 12; // 與 buildApiPayload 預設值對齊，方便日後統一調整
+const REGENERATE_HISTORY_LIMIT = 12;
 
-// ─────────────────────────────────────────────
-// 【最佳化 2】：強化型別安全，以 null 合併取代 undefined 字串污染
-// ─────────────────────────────────────────────
-const getTxt = (tree: any[]): string =>
-    tree.reduce(
-        (acc, b) => acc + (b.content ?? '') + '\n' + (b.children ? getTxt(b.children) : ''),
-        ''
-    );
-
-// ─────────────────────────────────────────────
-// 【最佳化 3】：頁面內容截斷保護，防止超長頁面耗盡 Token
-// ─────────────────────────────────────────────
 const MAX_PAGE_CHARS = 12000;
 
 async function buildPageContextPrompt(pageUuid: string): Promise<string> {
@@ -113,6 +102,7 @@ export const agent = {
 
     async ask(messages: any[], useNotification = false): Promise<string | null> {
         state.isBusy = true;
+        const previousAbortController = state.abortController;
         state.abortController = new AbortController();
         if (useNotification) startBusyFeedback();
         renderUI();
@@ -216,7 +206,7 @@ export const agent = {
 
         } finally {
             state.isBusy = false;
-            state.abortController = null;
+            state.abortController = previousAbortController;
             state.processingPageUuid = null;
             if (useNotification) stopBusyFeedback();
             renderUI();

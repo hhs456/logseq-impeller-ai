@@ -4,6 +4,7 @@ import { state } from './config';
 import { renderUI } from './ui';
 import { actions } from './actions';
 import { MemoryManager } from './memory';
+import { copyToClipboard } from './utils/clipboard';
 
 export const panel = {
     async togglePanel() {
@@ -55,34 +56,7 @@ export const panel = {
         const msg = state.chatStore[pageUuid]?.msgs[msgIndex];
 
         if (msg && msg.content) {
-            try {
-                await window.parent.navigator.clipboard.writeText(msg.content);
-                logseq.UI.showMsg('✅ 已複製對話內容', 'success');
-            } catch (err) {
-                const textArea = window.parent.document.createElement("textarea");
-                textArea.value = msg.content;
-                textArea.style.position = "fixed";
-                textArea.style.opacity = "0";
-
-                window.parent.document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
-
-                try {
-                    const successful = window.parent.document.execCommand('copy');
-                    window.parent.document.body.removeChild(textArea);
-
-                    if (successful) {
-                        logseq.UI.showMsg('✅ 已複製對話內容 (降級模式)', 'success');
-                    } else {
-                        throw new Error('execCommand returned false');
-                    }
-                } catch (fallbackErr) {
-                    window.parent.document.body.removeChild(textArea);
-                    console.error('複製完全失敗:', err, fallbackErr);
-                    logseq.UI.showMsg('❌ 複製失敗，剪貼簿遭到系統底層封鎖', 'error');
-                }
-            }
+            await copyToClipboard(msg.content, '✅ 已複製對話內容');
         }
     },
 

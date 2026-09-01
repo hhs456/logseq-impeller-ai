@@ -39,11 +39,10 @@ export async function writeToLogseq(aiMarkdown: string, targetUuid: string) {
         for (const line of lines) {
             if (line.trim() === '') continue;
 
-            // 計算開頭空白數量
-            const leadingSpaces = line.match(/^\s*/)?.[0].length || 0;
+            const normalizedLine = line.replace(/\t/g, '    ');
+            const leadingSpaces = normalizedLine.match(/^\s*/)?.[0].length || 0;
             
-            // 清理文字：移除前面的空白與清單符號
-            const content = line.trim().replace(/^([-*+]|\d+\.)\s+/, '');
+            const content = normalizedLine.trim().replace(/^([-*+]|\d+\.)\s+/, '');
 
             const newBlock = { content: content, children: [] };
 
