@@ -1,4 +1,5 @@
 // src/types.ts
+import type { I18NKey } from './i18n';
 
 export interface ToolCallFunction {
     name: string;
@@ -38,7 +39,7 @@ export interface AppState {
     isCollapsed: boolean;
     isMemoryCollapsed: boolean;      // 💡 新增：記錄記憶庫是否折疊
     tempInput: string; 
-    t: any; 
+    t: Record<I18NKey, string> | null; 
     abortController: AbortController | null; 
     timer: NodeJS.Timeout | null | any;
     processingPageUuid: string | null;

@@ -4,7 +4,7 @@ export async function copyToClipboard(text: string, successLabel: string): Promi
     try {
         await window.parent.navigator.clipboard.writeText(text);
         logseq.UI.showMsg(successLabel, 'success');
-    } catch {
+    } catch (err) {
         const textArea = window.parent.document.createElement("textarea");
         textArea.value = text;
         textArea.style.position = "fixed";
@@ -25,7 +25,7 @@ export async function copyToClipboard(text: string, successLabel: string): Promi
             }
         } catch (fallbackErr) {
             window.parent.document.body.removeChild(textArea);
-            console.error('Clipboard copy failed:', fallbackErr);
+            console.error('Clipboard copy failed:', err, fallbackErr);
             logseq.UI.showMsg('❌ Copy failed', 'error');
         }
     }

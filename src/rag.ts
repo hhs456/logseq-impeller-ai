@@ -2,7 +2,8 @@
 import '@logseq/libs';
 import { pipeline, env } from '@huggingface/transformers';
 import { create, insertMultiple, search } from '@orama/orama';
-import { state } from './config'; // 💡 匯入 state 以使用 i18n 語系設定
+import { state } from './config';
+import { escapeDsString } from './utils/query';
 
 let extractor: any = null;
 let vectorDb: any = null;
@@ -104,16 +105,18 @@ export async function syncVectorDB() {
         const processedBlocks = [];
         const blocksToVectorize = [];
 
+        const allHashes = await Promise.all(blocks.map(b => computeContentHash(b.content)));
+        const hashMap = new Map<string, string>();
+        blocks.forEach((b, i) => hashMap.set(b.id, allHashes[i]));
+
         for (const block of blocks) {
-            const contentHash = await computeContentHash(block.content);
+            const contentHash = hashMap.get(block.id)!;
             const cacheKey = `${graphName}_${block.id}_${contentHash}`;
             const cachedEmbedding = await getCachedEmbedding(cacheKey);
 
             if (cachedEmbedding) {
-                // 命中快取！直接拿來用，完全不耗 CPU
                 processedBlocks.push({ ...block, embedding: cachedEmbedding });
             } else {
-                // 沒算過，或是被修改過了，排入待轉向量的隊列
                 blocksToVectorize.push(block);
             }
         }
@@ -142,7 +145,7 @@ export async function syncVectorDB() {
                 processedBlocks.push({ ...block, embedding });
                 
                 // 記錄進快取準備清單
-                const cacheKey = `${graphName}_${block.id}_${await computeContentHash(block.content)}`;
+                const cacheKey = `${graphName}_${block.id}_${hashMap.get(block.id)!}`;
                 newEntries.push([cacheKey, embedding]);
             }
 
@@ -194,7 +197,7 @@ export async function searchSimilarBlocks(queryText: string) {
 
 export async function getLinkedReferencesForPage(targetPage: string) {
     try {
-        const lowerPageName = targetPage.toLowerCase().replace(/^#/, '').replace(/\\/g, '\\\\').replace(/"/g, '\\"'); 
+        const lowerPageName = escapeDsString(targetPage.toLowerCase().replace(/^#/, ''));
         const linkedRefsQuery = `
             [:find (pull ?b [:block/content {:block/page [:block/original-name]}])
              :where [?p :block/name "${lowerPageName}"]

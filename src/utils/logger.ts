@@ -1,4 +1,4 @@
-const DEBUG = false;
+const DEBUG = import.meta.env?.DEV ?? false;
 
 export const logger = {
     debug(...args: any[]) {

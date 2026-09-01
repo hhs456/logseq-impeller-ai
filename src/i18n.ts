@@ -1,4 +1,4 @@
-export const I18N: Record<string, Record<string, string>> = {
+const _I18N_BASE = {
     "zh-TW": {
         langName: "繁體中文 (Traditional Chinese)",
         baseCondition: "你是一個 Logseq 專家。請產出結構化的 Markdown 縮排清單。嚴禁廢話。保留 [[雙向連結]] 與 #標籤。",
@@ -77,4 +77,8 @@ export const I18N: Record<string, Record<string, string>> = {
         confirmDelete: "Are you sure you want to delete this message?\n⚠️ Note: This will also clear all subsequent chat history!",
         confirmRegenerate: "Are you sure you want to regenerate the AI response?\n⚠️ Note: This will discard all subsequent chat history!"
     }
-};
+} as const;
+
+export type LangKey = keyof typeof _I18N_BASE;
+export type I18NKey = keyof typeof _I18N_BASE['zh-TW'];
+export const I18N: Record<LangKey, Record<I18NKey, string>> = _I18N_BASE;

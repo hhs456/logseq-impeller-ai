@@ -2,6 +2,7 @@
 import '@logseq/libs';
 import { searchSimilarBlocks, getLinkedReferencesForPage } from './rag';
 import { getTxt } from './utils/markdown';
+import { escapeDsString } from './utils/query';
 
 /**
  * 1. 工具註冊中心 (Tool Registry)
@@ -225,7 +226,7 @@ export async function executeWebSearch(query: string) {
 // 修改後的全域搜尋實作
 export async function executeGlobalKeywordSearch(keyword: string): Promise<string> {
     try {
-        const escapedKeyword = keyword.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        const escapedKeyword = escapeDsString(keyword);
         const query = `
             [:find (pull ?b [*])
              :where

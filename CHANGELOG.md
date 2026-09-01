@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.9.4] - 2026-09-02
+
+### Changed
+- **RAG Hash Batching**: Replaced sequential per-block `computeContentHash` calls with a single `Promise.all` batch pre-computation, eliminating redundant hash calculations across both sync loops.
+- **i18n Type Safety**: Tightened `I18N` dictionary typing from `Record<string, Record<string, string>>` to `as const`-derived literal types (`LangKey`, `I18NKey`), enabling compile-time key validation.
+- **`state.t` Typing**: Replaced `any` with `Record<I18NKey, string> | null` in `AppState`, restoring full type protection across all i18n access sites.
+- **Dynamic Debug Flag**: `logger.ts` now uses `import.meta.env.DEV` instead of a hardcoded `false`, automatically enabling debug output in development builds.
+
+### Fixed
+- **Clipboard Error Logging**: Bound the outer `catch` error variable and included it in the fallback failure log, preventing silent loss of the original clipboard error.
+- **Datascript Escape Deduplication**: Extracted duplicated `.replace(/\\/g, '\\\\').replace(/"/g, '\\"')` logic from `rag.ts` and `tools.ts` into a shared `escapeDsString` utility (`src/utils/query.ts`).
+
 # [0.9.3] - 2026-09-01
 
 ### Changed
