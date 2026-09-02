@@ -20,8 +20,8 @@ const _I18N_BASE = {
         bgPage: "背景頁面",
         bgChatDone: "💬 「{name}」的 AI 回應已準備就緒",
         settingApiKeyDesc: "請填入你的 LLM API Key (如 OpenAI, OpenRouter 等)",
-        settingModelDesc: "設定你要使用的模型名稱 (例如: openai/gpt-4o-mini)",
-        settingBasePathDesc: "若使用本地端 (如 Ollama) 或代理伺服器，請在此更改 API 端點",
+        settingModelDesc: "設定模型名稱，如 openai/gpt-4o-mini、anthropic/claude-sonnet-4、google/gemini-2.5-flash",
+        settingBasePathDesc: "API 端點。常用：openrouter.ai、openai.com、anthropic.com、localhost:11434 (Ollama)",
         settingTagDesc: "AI 輸出結果時自動加上標籤或標題 (預設: 🤖 AI 處理結果)",
         settingWebApiKeyDesc: "請輸入您的搜尋引擎 API Key（用於啟用 AI 聯網搜尋技能）",
         settingMaxIterationsDesc: "決定 AI 每回合最多可連續自動翻閱檔案或搜尋的次數。(預設: 7)",
@@ -36,7 +36,19 @@ const _I18N_BASE = {
         exportSuccess: "✅ 已匯出對話：{name}",
         confirmClear: "確定要清空這頁的所有 AI 對話紀錄嗎？此動作無法復原！",
         confirmDelete: "確定要刪除這則訊息嗎？\n⚠️ 注意：這將會一併清除此訊息之後的「所有」對話紀錄！",
-        confirmRegenerate: "確定要讓 AI 重新回答嗎？\n⚠️ 注意：這將會捨棄這則回答之後的「所有」對話紀錄！"
+        confirmRegenerate: "確定要讓 AI 重新回答嗎？\n⚠️ 注意：這將會捨棄這則回答之後的「所有」對話紀錄！",
+        settingHeadingConnection: "🔑 Connection / 連線設定",
+        settingHeadingBehavior: "⚙️ Behavior / 行為設定",
+        settingHeadingAdvanced: "🔬 Advanced Features / 進階功能",
+        settingTemperatureDesc: "控制 AI 創造性。0.0 最精確，1.0 最有創意。(預設: 0.7)",
+        settingSystemPromptDesc: "預設已填入內建提示詞。清空此欄 = 使用純內建提示（不含自訂指令）。修改內容 = 以 §0 最高優先序插入，覆蓋內建行為。",
+        settingReasoningEffortDesc: "控制推理模型（如 o3, o4-mini）的思考深度。留空表示不指定（適用大多數模型）。有效值：low / medium / high。",
+        settingEnableSemanticDesc: "啟用本地知識庫語意搜尋 (RAG)。停用可加快回應速度。",
+        settingEnableWebSearchDesc: "啟用 AI 聯網搜尋功能。需搭配下方的 Web Search API Key 才能生效。",
+        settingResetDesc: "重設所有設定回出廠預設值",
+        resetSettingsLabel: "Impeller AI: 重設所有設定 (Reset All Settings)",
+        resetSettingsConfirm: "確定要將所有設定重設為預設值嗎？此動作無法復原。",
+        resetSettingsDone: "✅ 設定已重設為預設值"
     },
     "en": {
         langName: "English",
@@ -59,8 +71,8 @@ const _I18N_BASE = {
         bgPage: "Background Page",
         bgChatDone: "💬 AI response for '{name}' is ready",
         settingApiKeyDesc: "Enter your LLM API Key (e.g., OpenAI, OpenRouter)",
-        settingModelDesc: "Set the model name you want to use (e.g., openai/gpt-4o-mini)",
-        settingBasePathDesc: "Change the API endpoint if using a local server (like Ollama) or proxy",
+        settingModelDesc: "Model name, e.g., openai/gpt-4o-mini, anthropic/claude-sonnet-4, google/gemini-2.5-flash",
+        settingBasePathDesc: "API endpoint. Common: openrouter.ai, openai.com, anthropic.com, localhost:11434 (Ollama)",
         settingTagDesc: "Custom tag or header for AI output (Default: 🤖 AI Result)",
         settingWebApiKeyDesc: "Please enter your search engine API key (to enable the AI web search skill).",
         settingMaxIterationsDesc: "Set the maximum number of consecutive tool uses (file reading/searching) allowed per query. (Default: 7)",
@@ -75,7 +87,19 @@ const _I18N_BASE = {
         exportSuccess: "✅ Chat exported: {name}",
         confirmClear: "Are you sure you want to clear all AI chat history for this page? This action cannot be undone!",
         confirmDelete: "Are you sure you want to delete this message?\n⚠️ Note: This will also clear all subsequent chat history!",
-        confirmRegenerate: "Are you sure you want to regenerate the AI response?\n⚠️ Note: This will discard all subsequent chat history!"
+        confirmRegenerate: "Are you sure you want to regenerate the AI response?\n⚠️ Note: This will discard all subsequent chat history!",
+        settingHeadingConnection: "🔑 Connection / 連線設定",
+        settingHeadingBehavior: "⚙️ Behavior / 行為設定",
+        settingHeadingAdvanced: "🔬 Advanced Features / 進階功能",
+        settingTemperatureDesc: "Controls AI creativity. 0.0 = precise, 1.0 = creative. (Default: 0.7)",
+        settingSystemPromptDesc: "Pre-filled with the built-in prompt. Clear this field = use pure built-in prompt (no custom instructions). Edit content = insert as §0 with highest priority, overriding built-in behavior.",
+        settingReasoningEffortDesc: "Controls reasoning depth for thinking models (e.g. o3, o4-mini). Leave blank to omit (works for all models). Valid values: low / medium / high.",
+        settingEnableSemanticDesc: "Enable local knowledge base semantic search (RAG). Disable to speed up responses.",
+        settingEnableWebSearchDesc: "Enable AI web search. Requires a valid Web Search API Key below.",
+        settingResetDesc: "Reset all settings to factory defaults",
+        resetSettingsLabel: "Impeller AI: 重設所有設定 (Reset All Settings)",
+        resetSettingsConfirm: "Are you sure you want to reset all settings to defaults? This cannot be undone.",
+        resetSettingsDone: "✅ Settings reset to defaults"
     }
 } as const;
 

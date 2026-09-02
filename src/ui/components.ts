@@ -13,7 +13,10 @@ export function buildHeader(isCollapsed: boolean, aiBtnText: string): string {
             <span style="font-size: 10px; opacity: 0.5;">${isCollapsed ? '▶' : '▼'}</span>
             <span style="font-weight: 600; font-size: 0.85em; opacity: 0.8;">🤖 ${aiBtnText.toUpperCase()}</span>
         </div>
-        <a data-on-click="hidePanel" style="opacity: 0.5; padding: 4px; cursor: pointer;">✕</a>
+        <div style="display: flex; align-items: center; gap: 4px;">
+            <a data-on-click="resetSettings" title="Reset settings to defaults" style="opacity: 0.4; padding: 4px; cursor: pointer; font-size: 11px;">↺</a>
+            <a data-on-click="hidePanel" style="opacity: 0.5; padding: 4px; cursor: pointer;">✕</a>
+        </div>
     </div>`;
 }
 

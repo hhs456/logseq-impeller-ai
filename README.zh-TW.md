@@ -1,6 +1,6 @@
 # 🌀 Impeller AI
 
-![Version](https://img.shields.io/badge/version-v0.9.4-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.9.5-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Logseq](https://img.shields.io/badge/Logseq-Plugin-0f172a?logo=logseq)
 
@@ -14,33 +14,7 @@
 
 ### 📸 功能預覽
 
-`0.5.0`
-|<img src="./img/screenshot_format.jpg" width="400" alt="Format Page Feature">|<img src="./img/screenshot_copy.jpg" width="400" alt="Advanced Message Controls">|
-|:---:|:---:|
-| *智慧層級排版* | *便捷對話操作 (複製/重新生成)* |
-
-`0.6.0`
-|<img src="./img/screenshot_rag.jpg" width="400" alt="Incremental RAG Sync">|<img src="./img/screenshot_export.jpg" width="400" alt="Export Chat Feature">|
-|:---:|:---:|
-|<img src="./img/screenshot_rag_2.jpg" width="400" alt="Incremental RAG Sync">|<img src="./img/screenshot_export_2.jpg" width="400" alt="Export Chat Feature">|
-| *增量 RAG 向量同步* | *一鍵匯出對話* |
-
-`0.7.0`
-|<img src="./img/screenshot_auto_serach.jpg" width="400" alt="Agentic Call Traces">|<img src="./img/screenshot_code_review.jpg" width="400" alt="Cross-file Structure Assembly">|
-|:---:|:---:|
-| *自主網路搜尋與知識庫探索* | *圖譜導航 (精準鎖定單行節點)* |
-
-`0.8.0`
-|<img src="./img/screenshot_md_header.jpg" width="400" alt="Markdown Headers">|<img src="./img/screenshot_md_link&list.jpg" width="400" alt="Markdown Links and Lists">|
-|:---:|:---:|
-| *豐富渲染：標題* | *豐富渲染：連結與列表* |
-|<img src="./img/screenshot_md_block&table.jpg" width="400" alt="Markdown Blockquotes & Tables">|<img src="./img/screenshot_md_code.jpg" width="400" alt="Markdown Code Blocks">|
-| *豐富渲染：區塊引用與表格* | *豐富渲染：程式碼區塊 (可複製)* |
-
-`0.9.0`
-|<img src="./img/screenshot_history.jpg" width="800" alt="Persistent Chat History">|
-|:---:|
-| *持久化的分頁對話歷史紀錄* |
+各版本（0.5.0 – 0.9.0）的截圖請參閱 [GitHub 儲存庫](https://github.com/hhs456/logseq-impeller-ai)。
 
 ---
 

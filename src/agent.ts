@@ -113,13 +113,20 @@ export const agent = {
         // 【最佳化 6】：從設定動態讀取，並以常數作 fallback，防止設定失效
         const maxIterations: number =
             (logseq.settings?.maxIterations as number) ?? DEFAULT_MAX_ITERATIONS;
+        const temperature: number =
+            (logseq.settings?.temperature as number) ?? 0.7;
+        const reasoningEffort: string =
+            ((logseq.settings?.reasoningEffort as string) ?? "").trim().toLowerCase();
 
         try {
             const { apiKey, model, basePath } = logseq.settings!;
             const tools = getAvailableTools();
 
             while (iterations < maxIterations) {
-                const requestBody: any = { model, messages: currentMessages };
+                const requestBody: any = { model, messages: currentMessages, temperature };
+                if (reasoningEffort) {
+                    requestBody.reasoning_effort = reasoningEffort;
+                }
 
                 if (tools) {
                     requestBody.tools = tools;

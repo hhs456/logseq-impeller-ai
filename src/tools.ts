@@ -13,7 +13,7 @@ export function getAvailableTools() {
     const settings = logseq.settings;
 
     // 工具 A：網路搜尋
-    if (settings?.webApiKey) {
+    if (settings?.enableWebSearch && settings?.webApiKey) {
         tools.push({
             type: "function",
             function: {
@@ -30,37 +30,37 @@ export function getAvailableTools() {
         });
     }
 
-    // 工具 B：本地語意搜尋 (RAG)
-    tools.push({
-        type: "function",
-        function: {
-            name: "semantic_search",
-            description: "Fuzzy semantic search for the local knowledge base. Use this tool to retrieve broad context, detailed content, or implicit themes about a specific topic.",
-            parameters: {
-                type: "object",
-                properties: {
-                    query: { type: "string", description: "The search query or sentence. Include rich context if possible." }
-                },
-                required: ["query"]
+    if (settings?.enableSemanticSearch !== false) {
+        tools.push({
+            type: "function",
+            function: {
+                name: "semantic_search",
+                description: "Fuzzy semantic search for the local knowledge base. Use this tool to retrieve broad context, detailed content, or implicit themes about a specific topic.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        query: { type: "string", description: "The search query or sentence. Include rich context if possible." }
+                    },
+                    required: ["query"]
+                }
             }
-        }
-    });
+        });
 
-    // 工具 C：圖譜標籤搜尋 (Datalog)
-    tools.push({
-        type: "function",
-        function: {
-            name: "graph_tag_search",
-            description: "Precise graph database search. Use this tool to find all notes explicitly linked to a specific tag or page. Ideal for cross-referencing, finding similar entities, or listing items under a category.",
-            parameters: {
-                type: "object",
-                properties: {
-                    target_page: { type: "string", description: "The target tag or page name. Do not include the '#' symbol." }
-                },
-                required: ["target_page"]
+        tools.push({
+            type: "function",
+            function: {
+                name: "graph_tag_search",
+                description: "Precise graph database search. Use this tool to find all notes explicitly linked to a specific tag or page. Ideal for cross-referencing, finding similar entities, or listing items under a category.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        target_page: { type: "string", description: "The target tag or page name. Do not include the '#' symbol." }
+                    },
+                    required: ["target_page"]
+                }
             }
-        }
-    });
+        });
+    }
 
     // 工具 D：讀取頁面大綱骨架 (解決程式碼/大檔案 Token 爆炸)
     tools.push({

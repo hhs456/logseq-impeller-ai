@@ -4,7 +4,7 @@ import { state } from './config';
 import { writeToLogseq } from './engine';
 import { getTxt } from './utils/markdown';
 import { copyToClipboard } from './utils/clipboard';
-import { buildSystemPrompt } from './prompts';
+import { buildSystemPrompt, getStaticPromptParts } from './prompts';
 import { MemoryManager } from './memory';
 import { agent } from './agent';
 import { renderUI } from './ui';
@@ -167,5 +167,23 @@ export const actions = {
             console.error('導航至頁面失敗:', err);
             logseq.UI.showMsg('❌ 無法跳轉至該頁面', 'error');
         }
+    },
+
+    async resetSettings() {
+        if (!confirm(state.t.resetSettingsConfirm)) return;
+        logseq.updateSettings({
+            apiKey: "",
+            model: "openai/gpt-4o-mini",
+            basePath: "https://openrouter.ai/api/v1",
+            tag: state.t.tagDefault,
+            temperature: 0.7,
+            maxIterations: 7,
+            systemPromptOverride: getStaticPromptParts(state.t.langName).join('\n\n'),
+            reasoningEffort: "",
+            enableSemanticSearch: true,
+            enableWebSearch: false,
+            webApiKey: "",
+        });
+        logseq.UI.showMsg(state.t.resetSettingsDone, 'success');
     },
 };

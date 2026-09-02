@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.9.5] - 2026-09-02
+
+### Added
+- **Reasoning Effort Setting**: New `reasoningEffort` option (valid values: `low` / `medium` / `high`) to control the thinking depth of reasoning models (e.g. o3, o4-mini). The field is only sent in the API request body when non-empty, so it has no effect on non-reasoning models.
+- **Version Bump Script**: Added `scripts/bump-version.mjs` and `npm run bump` to synchronise version numbers across `package.json`, README badges, and `CHANGELOG.md` in a single command. Zero external dependencies.
+
+### Changed
+- **System Prompt Description**: The `systemPromptOverride` setting description now documents the structure of the built-in system prompt (sections §1–§5), so users know exactly what defaults they are overriding without reading source code.
+
+### Fixed
+- **Reset Settings Sync**: `resetSettings()` now also resets the new `reasoningEffort` field, keeping the manual default mirror in sync with the settings schema.
+
 # [0.9.4] - 2026-09-02
 
 ### Changed

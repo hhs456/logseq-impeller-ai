@@ -6,6 +6,7 @@ import { agent } from './agent';
 import { actions } from './actions';
 import { renderUI } from './ui';
 import { syncVectorDB } from './rag';
+import { getStaticPromptParts } from './prompts';
 
 // ✅ [改善1] 將 initRAG 提升至 main() 外部，成為頂層函式
 //    - 職責單一、清晰可見
@@ -31,46 +32,103 @@ async function main() {
     // --- 插件設定面板 ---
     logseq.useSettingsSchema([
         {
+            key: "headingConnection",
+            type: "heading",
+            title: state.t.settingHeadingConnection,
+            description: "",
+            default: null,
+        },
+        {
             key: "apiKey",
             type: "string",
-            title: "1. API Key",
+            title: "API Key",
             description: state.t.settingApiKeyDesc,
             default: ""
         },
         {
             key: "model",
             type: "string",
-            title: "2. Model",
+            title: "Model",
             description: state.t.settingModelDesc,
             default: "openai/gpt-4o-mini"
         },
         {
             key: "basePath",
             type: "string",
-            title: "3. API Endpoint",
+            title: "API Endpoint",
             description: state.t.settingBasePathDesc,
             default: "https://openrouter.ai/api/v1"
         },
         {
+            key: "headingBehavior",
+            type: "heading",
+            title: state.t.settingHeadingBehavior,
+            description: "",
+            default: null,
+        },
+        {
             key: "tag",
             type: "string",
-            title: "4. Custom Tag",
+            title: "Custom Tag",
             description: state.t.settingTagDesc,
             default: state.t.tagDefault
         },
         {
-            key: "webApiKey",
-            type: "string",
-            title: "5. Web Search API Key",
-            description: state.t.settingWebApiKeyDesc,
-            default: "",
+            key: "temperature",
+            type: "number",
+            title: "Temperature",
+            description: state.t.settingTemperatureDesc,
+            default: 0.7
         },
         {
             key: "maxIterations",
             type: "number",
-            default: 7,
-            title: "6. Max Iterations",
+            title: "Max Iterations",
             description: state.t.settingMaxIterationsDesc,
+            default: 7
+        },
+        {
+            key: "systemPromptOverride",
+            type: "string",
+            title: "System Prompt Override",
+            description: state.t.settingSystemPromptDesc,
+            default: getStaticPromptParts(state.t.langName).join('\n\n'),
+            inputAs: "textarea"
+        },
+        {
+            key: "reasoningEffort",
+            type: "string",
+            title: "Reasoning Effort",
+            description: state.t.settingReasoningEffortDesc,
+            default: ""
+        },
+        {
+            key: "headingAdvanced",
+            type: "heading",
+            title: state.t.settingHeadingAdvanced,
+            description: "",
+            default: null,
+        },
+        {
+            key: "enableSemanticSearch",
+            type: "boolean",
+            title: "Enable Semantic Search (RAG)",
+            description: state.t.settingEnableSemanticDesc,
+            default: true
+        },
+        {
+            key: "enableWebSearch",
+            type: "boolean",
+            title: "Enable Web Search",
+            description: state.t.settingEnableWebSearchDesc,
+            default: false
+        },
+        {
+            key: "webApiKey",
+            type: "string",
+            title: "Web Search API Key",
+            description: state.t.settingWebApiKeyDesc,
+            default: ""
         }
     ]);
 
@@ -101,6 +159,13 @@ async function main() {
     }, async () => {
         // ✅ [確認安全] exportChat 在 panel.ts 中以一般函式定義，不依賴 this，直接呼叫安全
         panel.exportChat();
+    });
+
+    logseq.App.registerCommandPalette({
+        key: 'reset-settings',
+        label: state.t.resetSettingsLabel,
+    }, async () => {
+        await actions.resetSettings();
     });
 
     // --- 路由切換監聽 ---
