@@ -30,8 +30,11 @@ export function renderMarkdown(text: string): string {
     
     // 💡 核心修正：直接在預處理階段，將 [[頁面]] 一步到位轉成符合你新架構的通用安全連結
     const processedText = text.replace(
-        /\[\[(.*?)\]\]/g, 
-        '<a class="ai-chat-wiki-link" data-on-click="openPage" data-page-name="$1" style="color: var(--ls-link-text-color); cursor: pointer; text-decoration: underline; font-weight: 500;">[[$1]]</a>'
+        /\[\[(.*?)\]\]/g,
+        (_, pageName) => {
+            const safe = escapeHTML(pageName);
+            return `<a class="ai-chat-wiki-link" data-on-click="openPage" data-page-name="${safe}">[[${safe}]]</a>`;
+        }
     );
     
     // 1. 建立自訂的 Renderer     
@@ -40,16 +43,14 @@ export function renderMarkdown(text: string): string {
     // 注意這裡：原本的 function(code, language) 改成解構單一物件 { text, lang }
     renderer.code = function({ text, lang }) {
         // 如果沒有指定語言，預設為空字串
-        const language = lang || '';  
+        const language = escapeHTML(lang || '');  
         // 將程式碼內容進行 URL 編碼，避免破壞 HTML 屬性結構
         const encodedCode = encodeURIComponent(text); 
         
         return `
-        <div style="position: relative; margin-bottom: 1em;">
-            <!-- 程式碼專屬的複製按鈕 -->
-            <button class="ai-copy-code-btn" 
-                    style="position: absolute; top: 4px; right: 4px; padding: 2px 6px; font-size: 12px; opacity: 0.7; cursor: pointer; border-radius: 4px;" 
-                    data-on-click="copyCode" 
+        <div class="ai-code-block">
+            <button class="ai-copy-code-btn"
+                    data-on-click="copyCode"
                     data-code="${encodedCode}">📋 Copy</button>
             <pre><code class="language-${language}">${escapeHTML(text)}</code></pre>
         </div>
@@ -71,7 +72,7 @@ export function renderMarkdown(text: string): string {
             'tr', 'th', 'td', 'br', 'span', 'div', 'input', 'button' 
         ], 
         ALLOWED_ATTR: [ 
-            'href', 'target', 'class', 'style', 'type', 'checked',  
+            'href', 'target', 'class', 'type', 'checked',  
             'data-on-click', 'data-code', 'data-page-name' 
         ]
     });

@@ -30,6 +30,7 @@ export function buildMemorySection(isMemoryCollapsed: boolean): string {
     const titleText = state.t?.langName?.includes("Chinese") ? "🧠 歷史對話記憶庫" : "🧠 Chat Memories";
     const arrowIcon = isMemoryCollapsed ? '▶' : '▼';
 
+    // 安全確認：p.name 已通過 escapeHTML() 跳脫，data-page-name 屬性值與顯示文字均安全
     const linksHtml = savedPages.map(p => `
         <span class="ai-memory-page-link" 
               data-on-click="openPage" 

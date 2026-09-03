@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.9.6] - 2026-09-03
+
+### Fixed
+- **XSS Prevention (Wiki-link Attribute Escape)**: The `[[page-name]]` regex replacement in `renderMarkdown()` now uses a callback function with `escapeHTML()` to sanitize page names before inserting them into HTML attributes. This prevents malicious page names containing `"` from escaping the `data-page-name` attribute boundary and injecting arbitrary HTML attributes.
+- **Datalog Injection Hardening**: `escapeDsString()` now escapes control characters (`\n`, `\r`, `\t`, `\f`) in addition to backslashes and double quotes, preventing newline injection attacks in Clojure/Datalog query strings.
+- **SSRF Prevention (basePath Validation)**: The `ask()` function now validates `basePath` using `new URL()` with a strict protocol whitelist (`http:` / `https:`), rejecting dangerous schemes like `file://` or `javascript:` before any fetch request is made.
+- **Prompt Injection Mitigation**: User input in `sendMsg()` is now capped at 8,000 characters. Inputs exceeding this limit are automatically truncated with a warning notification, preventing context-window flooding attacks.
+- **Sensitive Data Leakage**: Removed two `console.log` statements that printed the full request body (including chat history) and model response to the browser console, reducing the risk of API key or conversation data exposure in DevTools.
+- **Settings Validation**: `onSettingsChanged()` now validates `basePath` URL format and protocol whenever settings are modified, displaying a warning if the user enters an invalid or non-http(s) endpoint.
+- **Clipboard Fallback Deprecation Warning**: Added a `console.warn` before the deprecated `execCommand('copy')` fallback to flag its usage during development.
+
+- **CSS Injection Prevention (Code Block Language)**: The `renderer.code` function now applies `escapeHTML()` to the `lang` parameter before inserting it into the `class="language-${language}"` attribute. This prevents malicious language identifiers containing `"` from escaping the attribute boundary and injecting arbitrary `style` attributes that could bypass DOMPurify sanitization.
+- **Tool Execution Parameter Leakage**: Removed the `args` parameter from the console.log statement in `executeToolCall()`, preventing sensitive tool parameters (search queries, block UUIDs, keywords) from being exposed in the browser DevTools console.
+
+### Changed
+- **Memory Section Safety Confirmation**: Added an explicit comment in `buildMemorySection()` confirming that `escapeHTML()` is correctly applied to both `data-page-name` attribute values and display text for saved page names.
+
 # [0.9.5] - 2026-09-02
 
 ### Added

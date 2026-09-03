@@ -146,4 +146,28 @@ export const SIDEBAR_CSS = `
     #right-sidebar #ai-sidebar-container .ai-memory-scrollbar-container::-webkit-scrollbar-thumb:hover {
         background: var(--ls-link-text-color);
     }
+
+    /* 🌟 程式碼區塊容器 */
+    #right-sidebar #ai-sidebar-container .ai-bubble-content .ai-code-block {
+        position: relative;
+        margin-bottom: 1em;
+    }
+    #right-sidebar #ai-sidebar-container .ai-bubble-content .ai-copy-code-btn {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        padding: 2px 6px;
+        font-size: 12px;
+        opacity: 0.7;
+        cursor: pointer;
+        border-radius: 4px;
+    }
+
+    /* 🌟 Wiki 連結樣式（原 inline style 遷移至此） */
+    #right-sidebar #ai-sidebar-container .ai-bubble-content .ai-chat-wiki-link {
+        color: var(--ls-link-text-color);
+        cursor: pointer;
+        text-decoration: underline;
+        font-weight: 500;
+    }
 `;

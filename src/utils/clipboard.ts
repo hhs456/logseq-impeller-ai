@@ -15,6 +15,7 @@ export async function copyToClipboard(text: string, successLabel: string): Promi
         textArea.select();
 
         try {
+            console.warn('[Impeller AI] clipboard.writeText 失敗，降級使用已棄用的 execCommand("copy")。');
             const successful = window.parent.document.execCommand('copy');
             window.parent.document.body.removeChild(textArea);
 

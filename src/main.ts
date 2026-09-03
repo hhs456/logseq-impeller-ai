@@ -7,6 +7,7 @@ import { actions } from './actions';
 import { renderUI } from './ui';
 import { syncVectorDB } from './rag';
 import { getStaticPromptParts } from './prompts';
+import { encryptApiKey, decryptApiKey, AES_PREFIX } from './utils/crypto';
 
 // ✅ [改善1] 將 initRAG 提升至 main() 外部，成為頂層函式
 //    - 職責單一、清晰可見
@@ -44,6 +45,13 @@ async function main() {
             title: "API Key",
             description: state.t.settingApiKeyDesc,
             default: ""
+        },
+        {
+            key: "showApiKey",
+            type: "boolean",
+            title: "👁️ 顯示 API Key（明碼）",
+            description: "開啟後會在訊息中短暫顯示明碼 Key，隨後自動關閉此選項",
+            default: false
         },
         {
             key: "model",
@@ -129,14 +137,90 @@ async function main() {
             title: "Web Search API Key",
             description: state.t.settingWebApiKeyDesc,
             default: ""
+        },
+        {
+            key: "showWebApiKey",
+            type: "boolean",
+            title: "👁️ 顯示 Web Search API Key（明碼）",
+            description: "開啟後會在訊息中短暫顯示明碼 Key，隨後自動關閉此選項",
+            default: false
         }
     ]);
 
+    async function migrateApiKeys() {
+        const apiKey = logseq.settings?.apiKey as string;
+        if (apiKey && !apiKey.startsWith(AES_PREFIX)) {
+            const decrypted = await decryptApiKey(apiKey);
+            if (decrypted) {
+                logseq.updateSettings({ apiKey: await encryptApiKey(decrypted) });
+            }
+        }
+        const webApiKey = logseq.settings?.webApiKey as string;
+        if (webApiKey && !webApiKey.startsWith(AES_PREFIX)) {
+            const decrypted = await decryptApiKey(webApiKey);
+            if (decrypted) {
+                logseq.updateSettings({ webApiKey: await encryptApiKey(decrypted) });
+            }
+        }
+    }
+    await migrateApiKeys();
+
     // ✅ [改善4] 監聽設定變更，確保 API Key / Model 等異動後即時生效，無需重啟插件
     logseq.onSettingsChanged((newSettings) => {
-        console.log("⚙️ 插件設定已更新，正在套用...", newSettings);
-        // state 中若有快取設定值，可在此處同步更新
-        // 例如：state.apiKey = newSettings.apiKey ?? state.apiKey;
+        // 即時加密 API Key（使用者換 key 時立刻加密，避免明文暴露）
+        // 注意：這裡假設輸入是明文，因為舊格式已在 migrateApiKeys 中遷移
+        const apiKey = newSettings.apiKey as string;
+        if (apiKey && !apiKey.startsWith(AES_PREFIX)) {
+            encryptApiKey(apiKey).then(encrypted => {
+                logseq.updateSettings({ apiKey: encrypted });
+            });
+        }
+        const webApiKey = newSettings.webApiKey as string;
+        if (webApiKey && !webApiKey.startsWith(AES_PREFIX)) {
+            encryptApiKey(webApiKey).then(encrypted => {
+                logseq.updateSettings({ webApiKey: encrypted });
+            });
+        }
+
+        // 顯示 API Key 明碼（使用者開啟 toggle 時觸發）
+        if (newSettings.showApiKey) {
+            const key = newSettings.apiKey as string;
+            if (key) {
+                decryptApiKey(key).then(decrypted => {
+                    if (decrypted) {
+                        logseq.UI.showMsg(`🔑 API Key: ${decrypted}`, 'info', { timeout: 15000 });
+                    }
+                });
+            }
+            logseq.updateSettings({ showApiKey: false });
+        }
+        if (newSettings.showWebApiKey) {
+            const key = newSettings.webApiKey as string;
+            if (key) {
+                decryptApiKey(key).then(decrypted => {
+                    if (decrypted) {
+                        logseq.UI.showMsg(`🔑 Web Search API Key: ${decrypted}`, 'info', { timeout: 15000 });
+                    }
+                });
+            }
+            logseq.updateSettings({ showWebApiKey: false });
+        }
+
+        if (newSettings.basePath) {
+            try {
+                const url = new URL(newSettings.basePath as string);
+                if (!['http:', 'https:'].includes(url.protocol)) {
+                    logseq.UI.showMsg('⚠️ API Endpoint 的協定不是 http/https，請確認設定', 'warning');
+                } else if (url.protocol === 'http:') {
+                    const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1';
+                    if (!isLocalhost) {
+                        logseq.UI.showMsg('⚠️ 安全警告：您使用了非加密的 http:// 連線到非本機端點。API Key 將以明文傳輸，可能被竊取。建議改用 https://。', 'warning');
+                    }
+                }
+            } catch {
+                logseq.UI.showMsg('⚠️ API Endpoint URL 格式無效，請確認設定', 'warning');
+            }
+        }
     });
 
     // --- 注入 UI 互動模型 ---

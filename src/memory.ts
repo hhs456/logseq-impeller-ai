@@ -1,5 +1,6 @@
 // src/memory.ts
 import { state } from './config';
+import { obfuscate, deobfuscate } from './utils/obfuscate';
 
 const STORAGE_PREFIX = "impeller_chat_"; 
 
@@ -31,7 +32,7 @@ export const MemoryManager = {
         try {
             // 💡 核心修正 2：儲存金鑰綁定圖表路徑字首
             const key = this.getGraphPrefix() + targetUuid;
-            localStorage.setItem(key, JSON.stringify(state.chatStore[targetUuid]));
+            localStorage.setItem(key, obfuscate(JSON.stringify(state.chatStore[targetUuid])));
         } catch (err) {
             console.error("[Memory] 寫入持久化記憶失敗", err);
         }
@@ -42,7 +43,7 @@ export const MemoryManager = {
             // 💡 核心修正 3：讀取金鑰綁定圖表路徑字首
             const key = this.getGraphPrefix() + targetUuid;
             const data = localStorage.getItem(key);
-            return data ? JSON.parse(data) : null;
+            return data ? JSON.parse(deobfuscate(data)) : null;
         } catch (err) {
             console.error("[Memory] 讀取持久化記憶失敗", err);
             return null;
@@ -72,7 +73,7 @@ export const MemoryManager = {
                     const uuid = key.slice(currentPrefix.length);
                     const raw = localStorage.getItem(key);
                     if (raw) {
-                        const parsed = JSON.parse(raw);
+                        const parsed = JSON.parse(deobfuscate(raw));
                         if (parsed && parsed.name && parsed.msgs && parsed.msgs.length > 0) {
                             pages.push({ uuid, name: parsed.name });
                         }

@@ -3,6 +3,24 @@ import '@logseq/libs';
 import { searchSimilarBlocks, getLinkedReferencesForPage } from './rag';
 import { getTxt } from './utils/markdown';
 import { escapeDsString } from './utils/query';
+import { decryptApiKey } from './utils/crypto';
+
+const MAX_PARAM_LENGTH = 500;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function validateToolArgs(toolName: string, args: any): string | null {
+    for (const [key, value] of Object.entries(args)) {
+        if (typeof value === 'string' && value.length > MAX_PARAM_LENGTH) {
+            return `Parameter '${key}' exceeds maximum allowed length of ${MAX_PARAM_LENGTH}`;
+        }
+    }
+    if (toolName === 'read_target_block') {
+        if (!args.uuid || !UUID_REGEX.test(args.uuid)) {
+            return 'Invalid UUID format for read_target_block';
+        }
+    }
+    return null;
+}
 
 /**
  * 1. 工具註冊中心 (Tool Registry)
@@ -119,7 +137,12 @@ export function getAvailableTools() {
  */
 export async function executeToolCall(toolName: string, args: any): Promise<string> {
     try {
-        console.log(`[Tool 執行] 啟動工具: ${toolName}`, args);
+        const validationError = validateToolArgs(toolName, args);
+        if (validationError) {
+            console.warn(`[Tool 驗證] 參數拒絕: ${validationError}`);
+            return JSON.stringify({ error: validationError });
+        }
+        console.log(`[Tool 執行] 啟動工具: ${toolName}`);
 
         switch (toolName) {
             case "web_search":
@@ -190,7 +213,7 @@ async function executeReadTargetBlock(uuid: string): Promise<string> {
 
 // 原本就寫得很好的 Web Search
 export async function executeWebSearch(query: string) {
-    const apiKey = logseq.settings?.webApiKey;
+    const apiKey = await decryptApiKey(logseq.settings?.webApiKey as string);
 
     if (!apiKey) {
         return JSON.stringify({ error: "Search failed: Web Search API Key is missing. Please instruct the user to configure it in the plugin settings." });

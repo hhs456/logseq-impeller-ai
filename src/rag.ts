@@ -71,6 +71,7 @@ export async function fetchLogseqBlocks() {
     `;
     try {
         const results = await logseq.DB.datascriptQuery(query);
+        if (!results) return [];
         const blocks = results.flat()
             .map((block: any) => {
                 const pageName = block.page?.['original-name'] || block.page?.name || "未命名頁面";
