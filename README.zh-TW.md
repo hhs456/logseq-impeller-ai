@@ -14,7 +14,7 @@
 
 ### 📸 功能預覽
 
-各版本（0.5.0 – 0.9.0）的截圖請參閱 [GitHub 儲存庫](https://github.com/hhs456/logseq-impeller-ai)。
+各版本（0.5.0 – 0.9.0）的截圖請參閱 [SCREENSHOTS.md](https://github.com/hhs456/logseq-impeller-ai/blob/main/SCREENSHOTS.md)。
 
 ---
 

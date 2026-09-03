@@ -14,7 +14,7 @@ Acting as a **Universal LLM Portal**, it pumps contextual intelligence directly 
 
 ### 📸 See it in Action
 
-Screenshots for each version (0.5.0 – 0.9.0) are available on the [GitHub repository](https://github.com/hhs456/logseq-impeller-ai).
+Screenshots for each version (0.5.0 – 0.9.0) are available in [SCREENSHOTS.md](https://github.com/hhs456/logseq-impeller-ai/blob/main/SCREENSHOTS.md).
 
 ---
 
