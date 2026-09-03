@@ -8,6 +8,7 @@ import { buildSystemPrompt, getStaticPromptParts } from './prompts';
 import { MemoryManager } from './memory';
 import { agent } from './agent';
 import { renderUI } from './ui';
+import { logger } from './utils/logger';
 
 let isCopying = false;
 
@@ -64,12 +65,11 @@ export const actions = {
     // 💡 2. 新增：專門處理主動切換圖表事件的監聽回呼
     async handleGraphChange() {
         const newFingerprint = MemoryManager.getGraphPrefix();
-        console.log("[Actions] Graph switch detected, sandboxing memory...");
-        console.log("[Actions] Current graph fingerprint:", newFingerprint);
+        logger.info("[Actions] Graph switch detected, sandboxing memory...");
+        logger.info("[Actions] Current graph fingerprint:", newFingerprint);
 
-        // 💡 核心修正：即便 path 字串不同，只要指紋計算結果不同，就觸發強制重置
         if (state.currentGraphPath !== newFingerprint) {
-            console.log("[Actions] 偵測到圖表指紋變更，執行徹底重置...");
+            logger.info("[Actions] 偵測到圖表指紋變更，執行徹底重置...");
 
             // 1. 徹底洗掉舊圖表在記憶體（RAM）中的快取，防止殘留帶到新圖表
             state.chatStore = {};
@@ -127,7 +127,7 @@ export const actions = {
         ], true);
 
         if (res && typeof res === 'string') {
-            console.log("AI 產生的原始 Markdown：\n", res);
+            logger.info("AI 產生的原始 Markdown：\n", res);
             await writeToLogseq(res, targetUuid);
             logseq.UI.showMsg(state.t.done, 'success');
         }
@@ -141,7 +141,7 @@ export const actions = {
                 const decodedCode = decodeURIComponent(rawCode);
                 await copyToClipboard(decodedCode, '✅ 程式碼已複製至剪貼簿！');
             } catch (err) {
-                console.error('Decode failed:', err);
+                logger.error('Decode failed:', err);
                 logseq.UI.showMsg('❌ 解碼失敗', 'error');
             }
         }
@@ -164,7 +164,7 @@ export const actions = {
             await logseq.App.pushState('page', { name: pageName });
             
         } catch (err) {
-            console.error('導航至頁面失敗:', err);
+            logger.error('導航至頁面失敗:', err);
             logseq.UI.showMsg('❌ 無法跳轉至該頁面', 'error');
         }
     },

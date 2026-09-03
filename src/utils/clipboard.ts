@@ -1,4 +1,5 @@
 import '@logseq/libs';
+import { logger } from './logger';
 
 export async function copyToClipboard(text: string, successLabel: string): Promise<void> {
     try {
@@ -15,7 +16,7 @@ export async function copyToClipboard(text: string, successLabel: string): Promi
         textArea.select();
 
         try {
-            console.warn('[Impeller AI] clipboard.writeText 失敗，降級使用已棄用的 execCommand("copy")。');
+            logger.warn('[Impeller AI] clipboard.writeText 失敗，降級使用已棄用的 execCommand("copy")。');
             const successful = window.parent.document.execCommand('copy');
             window.parent.document.body.removeChild(textArea);
 
@@ -26,7 +27,7 @@ export async function copyToClipboard(text: string, successLabel: string): Promi
             }
         } catch (fallbackErr) {
             window.parent.document.body.removeChild(textArea);
-            console.error('Clipboard copy failed:', err, fallbackErr);
+            logger.error('Clipboard copy failed:', err, fallbackErr);
             logseq.UI.showMsg('❌ Copy failed', 'error');
         }
     }

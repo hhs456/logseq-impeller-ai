@@ -5,10 +5,10 @@ export const logger = {
         if (DEBUG) console.debug('[Impeller]', ...args);
     },
     info(...args: any[]) {
-        console.log('[Impeller]', ...args);
+        if (DEBUG) console.log('[Impeller]', ...args);
     },
     warn(...args: any[]) {
-        console.warn('[Impeller]', ...args);
+        if (DEBUG) console.warn('[Impeller]', ...args);
     },
     error(...args: any[]) {
         console.error('[Impeller]', ...args);

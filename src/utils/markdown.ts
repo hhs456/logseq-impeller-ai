@@ -61,7 +61,7 @@ export function renderMarkdown(text: string): string {
     const rawHtml = marked.parse(processedText, { 
         renderer: renderer, 
         gfm: true, 
-        breaks: true 
+        breaks: true
     }) as string; 
 
     // 3. 重點：除了 data-on-click 和 data-code，必須額外在白名單加入 'data-page-name' 屬性

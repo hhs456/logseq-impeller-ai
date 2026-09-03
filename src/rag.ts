@@ -4,6 +4,7 @@ import { pipeline, env } from '@huggingface/transformers';
 import { create, insertMultiple, search } from '@orama/orama';
 import { state } from './config';
 import { escapeDsString } from './utils/query';
+import { logger } from './utils/logger';
 
 let extractor: any = null;
 let vectorDb: any = null;
@@ -83,7 +84,7 @@ export async function fetchLogseqBlocks() {
             });
         return blocks;
     } catch (error) {
-        console.error("抓取 Logseq 資料失敗:", error);
+        logger.error("抓取 Logseq 資料失敗:", error);
         return [];
     }
 }
@@ -155,7 +156,7 @@ export async function syncVectorDB() {
             logseq.UI.showMsg(state.t.ragSyncDone || "✅ 增量更新完成！", "success");
         } else {
             // 如果全部命中快取，我們就在背景靜默完成，不打擾使用者
-            console.log(`✅ ${processedBlocks.length} 筆筆記均命中本地快取，跳過模型推論。`);
+            logger.info(`✅ ${processedBlocks.length} 筆筆記均命中本地快取，跳過模型推論。`);
         }
 
         // 🎯 最後，將最新的資料灌進 Orama 記憶體中供系統檢索 (此操作在毫秒級)
@@ -165,8 +166,7 @@ export async function syncVectorDB() {
         await insertMultiple(vectorDb, processedBlocks);
 
     } catch (err) {
-        console.error("向量資料庫同步失敗:", err);
-        // 💡 錯誤通知也加上 i18n 支援
+        logger.error("向量資料庫同步失敗:", err);
         logseq.UI.showMsg(state.t.ragSyncFailed || "❌ 本地 AI 大腦啟動失敗", "error");
     } finally {
         isSyncing = false; // 解除鎖定
@@ -191,7 +191,7 @@ export async function searchSimilarBlocks(queryText: string) {
             content: `(來自頁面 [[${hit.document.pageName}]]) ${hit.document.content}`
         }));
     } catch (err) {
-        console.error("向量搜尋失敗:", err);
+        logger.error("向量搜尋失敗:", err);
         return [];
     }
 }
@@ -220,7 +220,7 @@ export async function getLinkedReferencesForPage(targetPage: string) {
         const prefix = state.t.ragRefsFound || `以下是所有關聯到 [[{targetPage}]] 的筆記：\n`;
         return prefix.replace('{targetPage}', targetPage) + resultString;
     } catch (error) {
-        console.error("圖譜查詢失敗:", error);
+        logger.error("圖譜查詢失敗:", error);
         return (state.t.ragQueryError || `查詢 [[{targetPage}]] 時發生錯誤。`).replace('{targetPage}', targetPage);
     }
 }

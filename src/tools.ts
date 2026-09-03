@@ -4,6 +4,7 @@ import { searchSimilarBlocks, getLinkedReferencesForPage } from './rag';
 import { getTxt } from './utils/markdown';
 import { escapeDsString } from './utils/query';
 import { decryptApiKey } from './utils/crypto';
+import { logger } from './utils/logger';
 
 const MAX_PARAM_LENGTH = 500;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -139,10 +140,10 @@ export async function executeToolCall(toolName: string, args: any): Promise<stri
     try {
         const validationError = validateToolArgs(toolName, args);
         if (validationError) {
-            console.warn(`[Tool 驗證] 參數拒絕: ${validationError}`);
+            logger.warn(`[Tool 驗證] 參數拒絕: ${validationError}`);
             return JSON.stringify({ error: validationError });
         }
-        console.log(`[Tool 執行] 啟動工具: ${toolName}`);
+        logger.info(`[Tool 執行] 啟動工具: ${toolName}`);
 
         switch (toolName) {
             case "web_search":
@@ -168,12 +169,12 @@ export async function executeToolCall(toolName: string, args: any): Promise<stri
                 return await executeGlobalKeywordSearch(args.keyword);
 
             default:
-                console.warn(`未知的工具呼叫: ${toolName}`);
+                logger.warn(`未知的工具呼叫: ${toolName}`);
                 return JSON.stringify({ error: `Tool ${toolName} is not implemented.` });
         }
     } catch (error: any) {
-        console.error(`[Tool 錯誤] ${toolName} 執行失敗:`, error);
-        return JSON.stringify({ error: `Execution failed for tool: ${toolName}, reason: ${error.message}` });
+        logger.error(`[Tool 錯誤] ${toolName} 執行失敗:`, error);
+        return JSON.stringify({ error: `Execution failed for tool: ${toolName}` });
     }
 }
 

@@ -8,6 +8,7 @@ import { renderUI } from './ui';
 import { syncVectorDB } from './rag';
 import { getStaticPromptParts } from './prompts';
 import { encryptApiKey, decryptApiKey, AES_PREFIX } from './utils/crypto';
+import { logger } from './utils/logger';
 
 // ✅ [改善1] 將 initRAG 提升至 main() 外部，成為頂層函式
 //    - 職責單一、清晰可見
@@ -15,16 +16,15 @@ import { encryptApiKey, decryptApiKey, AES_PREFIX } from './utils/crypto';
 async function initRAG() {
     try {
         await syncVectorDB();
-        console.log("✅ 向量資料庫同步成功");
+        logger.info("✅ 向量資料庫同步成功");
     } catch (err) {
-        console.error("❌ 向量資料庫同步失敗:", err);
-        // 統一的使用者 UI 通知，確保任何情境下失敗都能被感知
+        logger.error("❌ 向量資料庫同步失敗:", err);
         logseq.UI.showMsg("Impeller AI 向量庫同步失敗。部分功能可能受限。", "error");
     }
 }
 
 async function main() {
-    console.log("Impeller AI Plugin Loaded");
+    logger.info("Impeller AI Plugin Loaded");
 
     // --- 基礎設定 ---
     const config = await logseq.App.getUserConfigs();
@@ -266,7 +266,7 @@ async function main() {
         await actions.handleGraphChange();
 
         // Step 2｜背景非同步：狀態隔離完成後，將耗時的向量庫同步丟到背景執行
-        console.log("🔄 偵測到圖譜切換，正在背景重新載入專屬向量資料庫...");
+        logger.info("🔄 偵測到圖譜切換，正在背景重新載入專屬向量資料庫...");
 
         // ✅ [改善2] 直接複用 initRAG()，錯誤處理邏輯與啟動時完全一致（含 UI 通知）
         initRAG();
@@ -277,4 +277,4 @@ async function main() {
     initRAG();
 }
 
-logseq.ready(main).catch(console.error);
+logseq.ready(main).catch(logger.error);

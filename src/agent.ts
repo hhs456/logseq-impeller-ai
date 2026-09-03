@@ -8,6 +8,7 @@ import { MemoryManager } from './memory';
 import { getAvailableTools, executeToolCall } from './tools';
 import { getTxt } from './utils/markdown';
 import { decryptApiKey } from './utils/crypto';
+import { logger } from './utils/logger';
 
 // ─────────────────────────────────────────────
 // 【最佳化 1】：常數集中管理，避免魔術數字散落各處
@@ -150,7 +151,7 @@ export const agent = {
                     requestBody.tool_choice = "auto";
                 }
 
-                console.log(`[第 ${iterations} 次請求] 發送給模型: ${model}，工具數: ${tools?.length ?? 0}`);
+                logger.info(`[第 ${iterations} 次請求] 發送給模型: ${model}，工具數: ${tools?.length ?? 0}`);
 
                 const response = await fetch(`${parsedBase.origin}${parsedBase.pathname.replace(/\/$/, '')}/chat/completions`, {
                     method: "POST",
@@ -168,7 +169,7 @@ export const agent = {
                 const message = data.choices?.[0]?.message;
 
                 if (!message) {
-                    console.error("OpenRouter 回傳異常詳細資料:", data);
+                    logger.error("OpenRouter 回傳異常:", data);
                     const errMsg = data.error?.message ?? data.error ?? JSON.stringify(data);
                     logseq.UI.showMsg(`API 拒絕請求: ${errMsg}`, 'error');
                     return null;
@@ -195,7 +196,7 @@ export const agent = {
             }
 
             // 【維持原有】：防呆攔截，達到最大迭代次數時的友善提示
-            console.warn(`[Agent] ⚠️ 已達到最大思考次數限制 (${maxIterations}次)，強制暫停以避免無窮迴圈。`);
+            logger.warn(`[Agent] ⚠️ 已達到最大思考次數限制 (${maxIterations}次)，強制暫停以避免無窮迴圈。`);
             return (
                 `⚠️ **[系統攔截]** 思考程序已達到上限 (${maxIterations} 次)。\n` +
                 `這通常是因為您要求的檔案或程式碼結構太過龐大，導致我需要不斷反覆搜尋。\n\n` +
@@ -205,8 +206,8 @@ export const agent = {
             );
 
         } catch (e: any) {
-            if (e.name === 'AbortError') {
-                console.log("偵測到使用者終止任務，正在保留目前的工具執行與對話歷程...");
+        if (e.name === 'AbortError') {
+            logger.info("偵測到使用者終止任務，正在保留目前的工具執行與對話歷程...");
 
                 // 【最佳化 5】：摘要報告由獨立函式產生
                 const abortSummary = buildAbortSummary(currentMessages);
@@ -319,7 +320,7 @@ export const agent = {
                 showBackgroundCompletionMsg(pageUuid);
             }
         } catch (err) {
-            console.error("重新生成失敗:", err);
+            logger.error("重新生成失敗:", err);
         } finally {
             if (!success) {
                 // 還原至備份

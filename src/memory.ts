@@ -1,6 +1,7 @@
 // src/memory.ts
 import { state } from './config';
 import { obfuscate, deobfuscate } from './utils/obfuscate';
+import { logger } from './utils/logger';
 
 const STORAGE_PREFIX = "impeller_chat_"; 
 
@@ -22,7 +23,7 @@ export const MemoryManager = {
             // 這裡直接使用編碼後的字串作為唯一識別
             return `${STORAGE_PREFIX}${encodedGraphId}_`;
         } catch (err) {
-            console.error("[Memory] 生成圖表字首失敗，使用 fallback", err);
+            logger.error("[Memory] 生成圖表字首失敗，使用 fallback", err);
             return `${STORAGE_PREFIX}fallback_`;
         }
     },
@@ -34,7 +35,7 @@ export const MemoryManager = {
             const key = this.getGraphPrefix() + targetUuid;
             localStorage.setItem(key, obfuscate(JSON.stringify(state.chatStore[targetUuid])));
         } catch (err) {
-            console.error("[Memory] 寫入持久化記憶失敗", err);
+            logger.error("[Memory] 寫入持久化記憶失敗", err);
         }
     },
 
@@ -45,7 +46,7 @@ export const MemoryManager = {
             const data = localStorage.getItem(key);
             return data ? JSON.parse(deobfuscate(data)) : null;
         } catch (err) {
-            console.error("[Memory] 讀取持久化記憶失敗", err);
+            logger.error("[Memory] 讀取持久化記憶失敗", err);
             return null;
         }
     },
@@ -55,7 +56,7 @@ export const MemoryManager = {
             const key = this.getGraphPrefix() + targetUuid;
             localStorage.removeItem(key);
         } catch (err) {
-            console.error("[Memory] 清除歷史記憶失敗", err);
+            logger.error("[Memory] 清除歷史記憶失敗", err);
         }
     },
 
@@ -81,7 +82,7 @@ export const MemoryManager = {
                 }
             }
         } catch (err) {
-            console.error("[Memory] 獲取歷史記憶清單失敗:", err);
+            logger.error("[Memory] 獲取歷史記憶清單失敗:", err);
         }
         return pages;
     },

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.9.7] - 2026-09-04
+
+### Added
+- **GitHub Actions CI/CD**: Added `.github/workflows/publish.yml` to automate release builds. When a version tag (e.g., `v0.9.7`) is pushed, the workflow automatically builds the plugin, packages it into a zip file, and attaches it to the GitHub Release.
+
+### Changed
+- **Unified Logging System**: Replaced all direct `console.log/error/warn` calls with the centralized `logger` utility. The `info()` and `warn()` methods are now gated by `import.meta.env.DEV`, ensuring sensitive debug output is excluded from production builds while preserving error logs for troubleshooting.
+- **Tool Error Sanitization**: Tool execution errors no longer include `error.message` in the response, preventing internal implementation details from being exposed to the LLM.
+
+### Fixed
+- **Marked Deprecation Warning**: Removed `marked-mangle` package and related code. Investigation confirmed the warning originates from Logseq core, not this plugin.
+
+### Removed
+- **Unused Dependency**: Removed `vite-plugin-logseq` from devDependencies as it was not being used in the build configuration.
+
 # [0.9.6] - 2026-09-03
 
 ### Fixed
