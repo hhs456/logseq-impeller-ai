@@ -186,15 +186,45 @@ describe('syncVectorDB 狀態機', () => {
 
     it('(7) 探測 rejection 是純物件（2.0.2 實測形狀）→ 錯誤訊息帶來源與負載，非 [object Object]', async () => {
         mock.App.getInfo = vi.fn(async () => ({ version: '2.0.2', supportDb: true }));
-        mock.App.checkCurrentIsDbGraph = vi.fn(async () => { throw { error: 'not-ready', code: 42 }; });
+        mock.App.checkCurrentIsDbGraph = vi.fn(async () => { throw { message: 'db-worker has not been initialized', name: 'Error' }; });
         const rag = await loadRag();
 
         await rag.syncVectorDB();
         const st = rag.getIndexState() as any;
         expect(st.status).toBe('failed');
-        expect(st.message).toBe('checkCurrentIsDbGraph rejected: {"error":"not-ready","code":42}');
+        expect(st.message).toContain('db-worker has not been initialized');
         expect(rag.getRagDiagReport()).toContain('failed');
-        expect(rag.getRagDiagReport()).toContain('not-ready');
+        expect(rag.getRagDiagReport()).toContain('db-worker');
         expect(rag.getRagDiagReport()).not.toContain('[object Object]');
+    });
+
+    // 2.0.2 三轮實測的回歸鎖：supportDb 能力閘未開（疑似 getInfo 未回 true）
+    // → DB 圖被誤判 file → file 查詢零列 → canary 有列 → 指紋覆核必須改判，
+    // 終態為 db-adapter-disabled（可見的 warning），絕不是 schema-mismatch。
+    it('(8) supportDb 缺省的 DB 圖：schema-mismatch 經指紋改判為 db-adapter-disabled', async () => {
+        mock.App.getInfo = vi.fn(async () => ({ version: '2.0.2' }));
+        let dbFetchRan = false;
+        mock.DB.datascriptQuery = vi.fn(async (query: string) => {
+            if (query.includes(':block/title') && query.includes('(pull')) {
+                dbFetchRan = true;
+                return [];
+            }
+            if (query.includes('(count ?b) . :where [?b :block/title')) return 3412; // 指紋：DB 形狀
+            if (query.includes('(count ?b) . :where [?b :block/content')) return 0;
+            if (query.includes('(count')) return 50;                                  // canary
+            return [];                                                                 // file 查詢：零列
+        });
+
+        const rag = await loadRag();
+        await rag.syncVectorDB();
+
+        expect(rag.getIndexState()).toEqual({ status: 'unsupported', reason: 'db-adapter-disabled' });
+        expect(dbFetchRan).toBe(false); // 旗標關：DB adapter 絕不執行查詢
+        const report = rag.getRagDiagReport();
+        expect(report).toContain('title=3412 content=0');
+        expect(report).toContain('db-gated');
+        expect(report).not.toContain('schema-mismatch');
+        const warnings = mock.UI.showMsg.mock.calls.filter((c: any[]) => c[1] === 'warning');
+        expect(warnings).toHaveLength(1); // 一次性提示，與 Phase 0 一致
     });
 });

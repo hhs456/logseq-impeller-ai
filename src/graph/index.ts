@@ -41,3 +41,8 @@ export function resetAdapter(): void {
     adapterCache = null;
     resetGraphKind();
 }
+
+// 只清 adapter 快取：kind 已被指紋覆核定論時，不得連同 kind 一起抹掉
+export function invalidateAdapterCache(): void {
+    adapterCache = null;
+}

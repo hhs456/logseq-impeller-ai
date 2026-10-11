@@ -24,6 +24,35 @@ export async function getGraphCacheKey(): Promise<string> {
     return String((graph as any).url ?? (graph as any).path ?? 'unknown');
 }
 
+/**
+ * 圖譜類型探測。不加 try/catch：探測失敗＝例外逃出，
+ * 呼叫端（syncVectorDB / tools）讓它浮到各自的錯誤處理。
+ * supportDb 非 true 即判 file：舊宿主（getInfo resolve 成 undefined 或缺欄位）
+ * 永不觸及 checkCurrentIsDbGraph（R1 已實證）。
+ *
+ * 注意：此函數刻意保持「零額外查詢」——健康路徑不多付 IPC。
+ * supportDb 可能不實（2.0.2 實測三轮時間軸：疑似未回 true，致 DB 圖恆判 file），
+ * 該誤判由 fingerprintGraphKind() 在 schema-mismatch 異常時覆核，見下。
+ */
+export async function probeGraphKind(): Promise<GraphKind> {
+    const info = await logseq.App.getInfo().catch((e: unknown) => { throw tagged('getInfo', e); });
+    if (info?.supportDb !== true) return 'file';
+    const isDb = await logseq.App.checkCurrentIsDbGraph().catch((e: unknown) => { throw tagged('checkCurrentIsDbGraph', e); });
+    return isDb ? 'db' : 'file';
+}
+
+export async function getGraphKind(): Promise<GraphKind> {
+    const key = await getGraphCacheKey();
+    if (cache && cache.graphKey === key) return cache.kind;
+    const kind = await probeGraphKind();
+    cache = { graphKey: key, kind };
+    return kind;
+}
+
+export function resetGraphKind(): void {
+    cache = null;
+}
+
 async function countAttr(attr: string): Promise<number> {
     const out: any = await logseq.DB.datascriptQuery(
         `[:find (count ?b) . :where [?b ${attr} _]]`
@@ -36,72 +65,36 @@ async function countAttr(attr: string): Promise<number> {
     return 0;
 }
 
-interface ProbeResult {
-    kind: GraphKind;
-    // confident=false：capable 宿主上取得的全零判定，無法區分
-    // 「DB 尚在載入（階段②）」與「真正的空圖」——不得寫入快取。
-    confident: boolean;
-}
-
 /**
- * 2.0.2 實測（診斷時間軸，2026-10-11）：db worker 就緒分三段——
- * ①未初始化：查詢丟錯 db-worker-not-initialized（逃出，由 rag.ts 重試層接）；
- * ②worker 就緒但 DB 尚在載入：checkCurrentIsDbGraph 回 false 且 count 全零，
- *   不丟錯——這是「還不知道」，不是「file 圖」；
- * ③就緒：訊號可信。
- * supportDb 非 true 即判 file：舊宿主永不觸及新 API（R1 已實證）。
+ * Schema 指紋覆核：只用 datascriptQuery（所有宿主皆有），故不受 supportDb 能力閘限制。
+ * 回 'db'／'file'，或不確定時回 null（全零＝DB 尚在載入 與 真空圖 無法區分）。
+ *
+ * 呼叫時機**限定**在 file adapter 回報 schema-mismatch 之際：該狀態的定義就是
+ * 「:block/page 有 >20 列，但 :block/content 一列都撈不到」——在真 file 圖上是屬性漂移，
+ * 在 DB 圖上是分錯類（supportDb 能力閘未開）。同一訊號兩種成因，故在此覆核一次即可定論，
+ * 健康路徑零額外成本。
+ *
+ * 歧義偏向：title 與 content 同時有列 → file。旗標關時誤判 db 會讓既有 100% file
+ * 使用者吃到 GRAPH_TYPE_UNSUPPORTED（倒退於 Phase 0）；誤判 file 只讓新 DB 使用者
+ * 吃到 schema-mismatch。保守側是 file。
  */
-async function probeDetailed(): Promise<ProbeResult> {
-    const info = await logseq.App.getInfo().catch((e: unknown) => { throw tagged('getInfo', e); });
-    if (info?.supportDb !== true) return { kind: 'file', confident: true };
-    const isDb = await logseq.App.checkCurrentIsDbGraph().catch((e: unknown) => { throw tagged('checkCurrentIsDbGraph', e); });
-    if (isDb) return { kind: 'db', confident: true };
+export async function fingerprintGraphKind(): Promise<GraphKind | null> {
     const [titleN, contentN] = await Promise.all([countAttr(':block/title'), countAttr(':block/content')]);
-    if (titleN > 0 && contentN === 0) return { kind: 'db', confident: true };
-    if (contentN > 0) return { kind: 'file', confident: true };
-    return { kind: 'file', confident: false };
+    diag('probe-fingerprint', `title=${titleN} content=${contentN}`);
+    if (titleN > 0 && contentN === 0) return 'db';
+    if (contentN > 0) return 'file';
+    return null;
 }
-
-export async function probeGraphKind(): Promise<GraphKind> {
-    const p = await probeDetailed();
-    return p.kind;
-}
-
-export async function getGraphKind(): Promise<GraphKind> {
-    const key = await getGraphCacheKey();
-    if (cache && cache.graphKey === key) return cache.kind;
-    const p = await probeDetailed();
-    if (p.confident) cache = { graphKey: key, kind: p.kind };
-    return p.kind;
-}
-
-const PATIENCE_TRIES = 6;
-const PATIENCE_DELAY_MS = 500;
 
 /**
- * 同步路徑專用（rag.ts fetchLogseqBlocks）：階段②的不確定判定退避重探，
- * 直至拿到正面證據或耗盡（耗盡後以 'file' 收斂——真空圖落 'empty'，無害且無 ❌）。
- * 階段①的丟錯不經此處，由 rag.ts 的 withWorkerRetry 接。
- * confident 結果一樣寫入快取；不確定結果絕不快取。
+ * 在 schema-mismatch 異常點上做指紋覆核，並把定論寫入快取（以當前圖為鍵）。
+ * 回 null 表示不確定（全零）：快取維持原樣，讓本次同步以 schema-mismatch 收斂
+ * ——它是可見的 warning 狀態、不是 ❌，且下一次同步會再覆核一次。
  */
-export async function getPatientGraphKind(): Promise<GraphKind> {
+export async function reclassifyByFingerprint(): Promise<GraphKind | null> {
+    const kind = await fingerprintGraphKind();
+    if (kind === null) return null;
     const key = await getGraphCacheKey();
-    if (cache && cache.graphKey === key) return cache.kind;
-    for (let attempt = 1; ; attempt++) {
-        const p = await probeDetailed();
-        if (p.confident) {
-            cache = { graphKey: key, kind: p.kind };
-            return p.kind;
-        }
-        if (attempt >= PATIENCE_TRIES) {
-            diag('probe-giveup', `kind=${p.kind}（不確定收斂，未快取）`);
-            return p.kind;
-        }
-        diag('probe-ambiguous', `attempt=${attempt}`);
-        await new Promise((r) => setTimeout(r, PATIENCE_DELAY_MS));
-    }
-}
-
-export function resetGraphKind(): void {
-    cache = null;
+    cache = { graphKey: key, kind };
+    return kind;
 }

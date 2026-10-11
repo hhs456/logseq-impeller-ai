@@ -4,8 +4,8 @@ import { pipeline, env } from '@huggingface/transformers';
 import { create, insertMultiple, search } from '@orama/orama';
 import { state } from './config';
 import { logger } from './utils/logger';
-import { getGraphKind, getGraphCacheKey, getPatientGraphKind } from './graph/kind';
-import { getAdapter, isGraphUnsupported, resetAdapter } from './graph';
+import { getGraphKind, getGraphCacheKey, reclassifyByFingerprint } from './graph/kind';
+import { getAdapter, isGraphUnsupported, resetAdapter, invalidateAdapterCache } from './graph';
 import { diag, diagHistory, countDiag } from './graph/diag';
 import { SIMILARITY_THRESHOLD } from './graph/types';
 import type { FetchBlocksResult, IndexState, SearchOutcome } from './graph/types';
@@ -97,9 +97,7 @@ async function computeContentHash(content: string): Promise<string> {
 
 // 不 catch：查詢拋錯就讓它逃出，落入 syncVectorDB 的外層 catch
 export async function fetchLogseqBlocks(): Promise<FetchBlocksResult> {
-    // 同步路徑用「有耐心」的探測：2.0.2 階段②（DB 尚在載入）的全零判定
-    // 會退避重探而非誤快取成 file（實測：schema-mismatch 誤報，2026-10-11）
-    const kind = await getPatientGraphKind();
+    const kind = await getGraphKind();
     if (await isGraphUnsupported(kind)) {
         diag('db-gated', 'DB_ADAPTER_ENABLED=false');
         return {
@@ -110,7 +108,29 @@ export async function fetchLogseqBlocks(): Promise<FetchBlocksResult> {
         };
     }
     const adapter = await getAdapter();
-    return adapter.fetchAllBlocks();
+    const res = await adapter.fetchAllBlocks();
+
+    // file adapter 的 schema-mismatch ＝「:block/page 有 >20 列，但 :block/content 一列都撈不到」。
+    // 兩種成因共用同一訊號：真屬性漂移，或 supportDb 能力閘未實（2.0.2 三轮實測：
+    // 疑似 getInfo 未回 supportDb=true，致 DB 圖恆判 file）。指紋覆核一次即定論，
+    // 健康路徑零額外查詢。覆核成功改判 db 則重走守衛路徑（旗標關＝db-adapter-disabled）。
+    if (res.status === 'unsupported' && res.reason === 'schema-mismatch' && kind === 'file') {
+        const fixed = await reclassifyByFingerprint();
+        if (fixed === 'db') {
+            invalidateAdapterCache();
+            if (await isGraphUnsupported('db')) {
+                diag('db-gated', 'reclassified-by-fingerprint');
+                return {
+                    status: 'unsupported',
+                    kind: 'db',
+                    reason: 'db-adapter-disabled',
+                    detail: 'DB_ADAPTER_ENABLED=false (Phase 0)',
+                };
+            }
+            return (await getAdapter()).fetchAllBlocks();
+        }
+    }
+    return res;
 }
 
 // ==========================================
