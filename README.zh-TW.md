@@ -1,6 +1,6 @@
 # 🌀 Impeller AI
 
-![Version](https://img.shields.io/badge/version-v0.10.1-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.11.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Logseq](https://img.shields.io/badge/Logseq-Plugin-0f172a?logo=logseq)
 
@@ -46,7 +46,7 @@ Impeller AI 深度整合了 Logseq 的區塊（Block）生態系統。它不僅�
 ### ⚠️ 圖譜相容性（v0.10.1）
 
 * **檔案型圖譜（file-based graph）**：完整支援，行為不變。
-* **Logseq DB 圖譜**：**尚未支援。** 外掛現在會在啟動時偵測 DB 圖譜，並以一次性警告明確停用語意搜尋與圖譜查詢——絕不會再對 DB 圖譜靜默回答「找不到相關筆記」。DB 圖譜支援預計於 v0.11.x 推出。
+* **Logseq DB 圖譜**：**尚未啟用。** 外掛會在啟動時偵測 DB 圖譜，並以一次性警告明確停用語意搜尋與圖譜查詢——絕不會再對 DB 圖譜靜默回答「找不到相關筆記」。DB 讀取 adapter 已於 v0.11.0 落地但預設關閉，將於實測（DB 夜版）通過後的 0.11.x 版本啟用。
 
 ---
 

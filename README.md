@@ -1,6 +1,6 @@
 # 🌀 Impeller AI
 
-![Version](https://img.shields.io/badge/version-v0.10.1-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.11.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Logseq](https://img.shields.io/badge/Logseq-Plugin-0f172a?logo=logseq)
 
@@ -46,7 +46,7 @@ Impeller AI deeply integrates with Logseq's block ecosystem. It is not just a ch
 ### ⚠️ Graph Compatibility (v0.10.1)
 
 * **File-based graphs**: fully supported; behavior is unchanged.
-* **Logseq DB graphs**: **not supported yet.** The plugin now detects a DB graph at startup and explicitly disables semantic search and graph queries with a one-time warning — it will never silently answer "no relevant notes found" on a DB graph again. DB graph support is planned for v0.11.x.
+* **Logseq DB graphs**: **not enabled yet.** The plugin now detects a DB graph at startup and explicitly disables semantic search and graph queries with a one-time warning — it will never silently answer "no relevant notes found" on a DB graph again. The DB read adapter landed in v0.11.0 behind a disabled flag; support turns on after real-device (DB nightly) verification in a 0.11.x release.
 
 ---
 

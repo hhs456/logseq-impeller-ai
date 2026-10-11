@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.11.0] - 2026-10-11
+
+### Added
+- **GraphAdapter layer** (`src/graph/{types,text,canary,kind,index,file,db}.ts`): all schema-specific Logseq queries converge into a five-method adapter (`fetchAllBlocks` / `blocksReferencingPage` / `keywordSearch` / `pageTree` / `blockTree`). `FileGraphAdapter` is a verbatim port — its outputs are byte-identical to v0.10.1 (enforced by the file-graph snapshot, now with a 6th `getTxt` baseline). `DbGraphAdapter` implements the plan §4.3 datalog via `datascriptQuery` only, but ships **behind `DB_ADAPTER_ENABLED=false`**: with the flag off, DB behavior is exactly v0.10.1 (explicit `GRAPH_TYPE_UNSUPPORTED`), and the flag flips only after the nightly DB checklist (N0–N17) passes. No attribute names were invented for recycle/property-value exclusion — that decision awaits N9/N20 count comparisons.
+- **Unified text/display helpers** (`src/graph/text.ts`): `blockText()` prefers human-readable `fullTitle`/`full-title` over raw `content`/`title` (kills `[[uuid]]` noise for DB, fixes silent-`undefined` reads); `pageDisplayName()` is DB-title-first (chat headers keep their case); `slug()` shared by both backends. Page context (`agent.ts`), `getTxt` and all graph tools now read through the adapter.
+- **SDK type augmentation** (`src/graph/sdk-augment.d.ts`): module augmentation declares `AppInfo.supportDb`, `IAppProxy.checkCurrentIsDbGraph` and `IDBProxy.customQuery` without upgrading `@logseq/libs` (stays 0.0.17, zero runtime change); delete the file when upgrading. Verified resolvable under `moduleResolution: bundler`.
+- **Shared canary** (`src/graph/canary.ts`): the zero-result `(count ?b)` schema-drift probe now serves both adapters, so a DB "successful but empty" fetch is reported as `unsupported/schema-mismatch` instead of a silent empty index.
+- **Tests**: `tests/graph-file.test.ts` (adapter-level mapping/limits/fallbacks), `tests/graph-db.test.ts` (every DB datalog asserted to contain `:block/title` and never `:block/content`, plus field mapping — first consumer of the schema fake's `dbBlockRow`), `tests/rag-race.test.ts` (6 graph-switch race scenarios), `blockText`/`pageDisplayName`/`slug` cases in `tests/markdown.test.ts`.
+
+### Changed
+- `DB_ADAPTER_ENABLED` and `isGraphUnsupported()` moved to `src/graph/index.ts` (adapter selection lives with the flag); `rag.ts`'s DB branch and `tools.ts`'s two guards still share the single predicate.
+- `onCurrentGraphChanged` handler order is now ① `onGraphSwitched()` (synchronous) → ② `handleGraphChange()` → ③ `initRAG()`, closing the window where the old graph's index stays queryable during UI isolation.
+- DB-graph navigation: `openPage` pushes `{ name: uuid }` (host prefers uuid); file graphs keep the original-case name.
+
+### Fixed
+- **Cross-graph index race (N17)**: the `isSyncing` drop-lock is replaced by a generation token + serialized chain. Switching graphs while a sync is in flight no longer (a) silently abandons the new graph's index, nor (b) lets the old graph's late completion write into the current index (`semantic_search` on B could previously return A's content). Late arrivals — successes *and* errors — are discarded at every await boundary, including mid-embedding-loop, and a discarded round never fires the failure toast. `IndexState.building` now carries its `gen` (fills the Phase 0 scaffold).
 # [0.10.1] - 2026-10-11
 
 ### Added
