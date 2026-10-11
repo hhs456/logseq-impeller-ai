@@ -67,22 +67,28 @@ beforeEach(() => {
 });
 
 describe('file-graph 輸出快照（Phase 1 逐字比對基準）', () => {
-    it('五個呼叫點的輸出與 v0.10.1 一致', async () => {
+    it('五個呼叫點 + getTxt 的輸出與 v0.10.1 一致', async () => {
         vi.resetModules();
         const rag = await import('../src/rag');
         const tools = await import('../src/tools');
+        const { FileGraphAdapter } = await import('../src/graph/file');
+        const { getTxt } = await import('../src/utils/markdown');
 
         const fetched = await rag.fetchLogseqBlocks();
         const linkedRefs = await rag.getLinkedReferencesForPage('Apple');
         const keyword = await tools.executeToolCall('global_keyword_search', { keyword: 'Apple' });
         const outline = await tools.executeToolCall('get_page_outline', { page_name: 'Alpha' });
         const block = await tools.executeToolCall('read_target_block', { uuid: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' });
+        // 第六基準（§4.9 含 getTxt）：agent.ts 頁面上下文所吃的樹 → getTxt
+        const pageNodes = await new FileGraphAdapter().pageTree('Alpha');
+        const pageContextTxt = getTxt(pageNodes ?? []);
 
         await expect({
             fetchLogseqBlocks: fetched,
             getLinkedReferencesForPage: linkedRefs,
-            global_keyword_search: keyword,
+            getTxt: pageContextTxt,
             get_page_outline: outline,
+            global_keyword_search: keyword,
             read_target_block: block,
         }).toMatchFileSnapshot('./__snapshots__/file-graph-output.json');
     });

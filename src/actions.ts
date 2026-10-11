@@ -6,6 +6,8 @@ import { getStaticPromptParts } from './prompts';
 import { MemoryManager } from './memory';
 import { renderUI } from './ui';
 import { logger } from './utils/logger';
+import { getGraphKind } from './graph/kind';
+import { pageDisplayName } from './graph/text';
 
 let isCopying = false;
 
@@ -53,7 +55,10 @@ export const actions = {
         if (actualPage) {
             const prevUuid = state.currentPageUuid;
             state.currentPageUuid = actualPage.uuid;
-            const pageName = (actualPage.originalName || actualPage.name || "Untitled") as string;
+            const kind = await getGraphKind();
+            if (gen !== state.contextGen) return;
+            // 修 H：DB 無 originalName → title 優先；file 逐字等價現行
+            const pageName = (pageDisplayName(actualPage, kind) || "Untitled") as string;
 
             if (!state.chatStore[actualPage.uuid]) {
                 const savedChat = MemoryManager.loadHistory(actualPage.uuid);
@@ -129,7 +134,9 @@ export const actions = {
             }
 
             // ✅ 存在才執行官方跳轉
-            await logseq.App.pushState('page', { name: pageName });
+            // DB 以 uuid 路由（redirect-to-page! 建議 uuid，Q3/N15）；file 維持原始大小寫名
+            const kind = await getGraphKind();
+            await logseq.App.pushState('page', { name: kind === 'db' ? page.uuid : pageName });
             
         } catch (err) {
             logger.error('導航至頁面失敗:', err);

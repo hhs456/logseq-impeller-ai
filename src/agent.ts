@@ -7,6 +7,7 @@ import { renderUI, setSidebarStatus, renderStreamDelta } from './ui';
 import { buildSystemPrompt } from './prompts';
 import { MemoryManager } from './memory';
 import { getAvailableTools, executeToolCall } from './tools';
+import { getAdapter } from './graph';
 import { getTxt } from './utils/markdown';
 import { decryptApiKey } from './utils/crypto';
 import { logger } from './utils/logger';
@@ -34,11 +35,14 @@ export function _resetNoStreamSet(): void { noStreamSet.clear(); }
 // 頁面上下文
 // ─────────────────────────────────────────────
 async function buildPageContextPrompt(pageUuid: string): Promise<string> {
-    const blocks = await logseq.Editor.getPageBlocksTree(pageUuid);
+    // 第六呼叫點收攏（§4.1）：與 tools 共用同一讀取路徑；
+    // file 逐字等價，DB 經 blockText 取 fullTitle 可讀名（無 [[uuid]]，N14）
+    const adapter = await getAdapter();
+    const tree = (await adapter.pageTree(pageUuid)) ?? [];
     const system = buildSystemPrompt({ langName: state.t.langName });
     const pageName = state.chatStore[pageUuid]?.name ?? "Unknown Page";
 
-    let pageContent = getTxt(blocks);
+    let pageContent = getTxt(tree);
     if (pageContent.length > MAX_PAGE_CHARS) {
         pageContent =
             pageContent.slice(0, MAX_PAGE_CHARS) +

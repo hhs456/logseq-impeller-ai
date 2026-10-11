@@ -24,6 +24,11 @@ second line",
   "getLinkedReferencesForPage": "Here are all the notes associated with [[Apple]]:
 - [[Alpha]]: refers to [[Apple]] from body
 - [[Beta Gamma]]: another ref",
+  "getTxt": "Chapter One
+more
+nested text
+Chapter Two
+",
   "get_page_outline": "【Alpha 的大綱結構】
 - [UUID: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa] Chapter One more...
   (此區塊內部還包含 1 個子節點/子行程式碼)
