@@ -43,10 +43,10 @@ Impeller AI deeply integrates with Logseq's block ecosystem. It is not just a ch
 
 ---
 
-### ⚠️ Graph Compatibility (v0.10.1)
+### ⚠️ Graph Compatibility (v0.11.0)
 
-* **File-based graphs**: fully supported; behavior is unchanged.
-* **Logseq DB graphs**: **not enabled yet.** The plugin now detects a DB graph at startup and explicitly disables semantic search and graph queries with a one-time warning — it will never silently answer "no relevant notes found" on a DB graph again. The DB read adapter landed in v0.11.0 behind a disabled flag; support turns on after real-device (DB nightly) verification in a 0.11.x release.
+* **File-based graphs**: fully supported; behavior is unchanged (output byte-identical to v0.10.1).
+* **Logseq DB graphs**: **supported as of v0.11.0.** Semantic search, linked-reference queries and keyword search all read DB graphs through a dedicated adapter, verified on a real 2.0.2 beta graph. Two known gaps: keyword search matches raw block text (a word that only appears as a link's *display name* won't hit), and blocks from deleted pages can linger in the index until the next full re-sync. The right-sidebar panel still needs a second click after the sidebar was closed while the panel was open — that is a 2.0.2 host rendering change and affects file graphs equally.
 
 ---
 

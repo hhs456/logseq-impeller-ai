@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { installLogseqMock, LogseqMock } from './helpers/logseq-mock';
 import { createSchemaAwareFake, dbBlockRow } from './helpers/graph-fake';
 import { DbGraphAdapter } from '../src/graph/db';
+import { DB_ADAPTER_ENABLED, isGraphUnsupported, __setDbAdapterEnabledForTest } from '../src/graph';
 import { diagHistory, clearDiag } from '../src/graph/diag';
 
 let mock: LogseqMock;
@@ -207,5 +208,21 @@ describe('DbGraphAdapter 連結取代（N14）', () => {
         const node = await adapter.blockTree('b-1');
         expect(node!.text).toBe('引用 [[ZZTest Apple]] 與 #[[ZZCompany]] 的區塊');
         expect(node!.children[0].text).toBe('見 ((被引用的區塊文字))');
+    });
+});
+
+// 發版狀態鎖：本版實際發行旗標為 true；回滾＝翻回 false，兩條都要有證據。
+describe('DB_ADAPTER_ENABLED 發行狀態與回滾', () => {
+    it('旗標為 true；DB 圖譜不再被閘住，且強制關時回滾路徑有效', async () => {
+        expect(DB_ADAPTER_ENABLED).toBe(true);
+        expect(await isGraphUnsupported('db')).toBe(false);
+        expect(await isGraphUnsupported('file')).toBe(false);
+
+        __setDbAdapterEnabledForTest(false);
+        expect(await isGraphUnsupported('db')).toBe(true);
+        expect(await isGraphUnsupported('file')).toBe(false); // file 永不受旗標影響
+
+        __setDbAdapterEnabledForTest(null);
+        expect(await isGraphUnsupported('db')).toBe(false);
     });
 });

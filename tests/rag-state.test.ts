@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { installLogseqMock, LogseqMock } from './helpers/logseq-mock';
-import { createSchemaAwareFake, fileBlockRow } from './helpers/graph-fake';
+import { createSchemaAwareFake, fileBlockRow, dbBlockRow } from './helpers/graph-fake';
 import { I18N } from '../src/config';
 
 // jsdom 沒有 crypto.subtle；以確定性假實作替代（只需快取 key 前後一致，不需真实 SHA-256）
@@ -112,6 +112,10 @@ describe('syncVectorDB 狀態機', () => {
         mock.App.checkCurrentIsDbGraph = vi.fn(async () => true);
         mock.DB.datascriptQuery = vi.fn(async () => { throw new Error('must not run'); });
         const rag = await loadRag();
+        // 本版旗標為 true；此情境驗的是「翻回 false 的回滾路徑」，故強制關。
+        // loadRag() 已 resetModules，此處 import 拿到的是同一個 fresh 實例；
+        // 下一个测试的 loadRag() 會再取一次新實例，無需手動還原。
+        (await import('../src/graph')).__setDbAdapterEnabledForTest(false);
         await rag.syncVectorDB();
         await rag.syncVectorDB(); // 同 (graphKey, reason) 不得重複提示
         expect(rag.getIndexState()).toEqual({ status: 'unsupported', reason: 'db-adapter-disabled' });
@@ -216,6 +220,7 @@ describe('syncVectorDB 狀態機', () => {
         });
 
         const rag = await loadRag();
+        (await import('../src/graph')).__setDbAdapterEnabledForTest(false); // 回滾路徑
         await rag.syncVectorDB();
 
         expect(rag.getIndexState()).toEqual({ status: 'unsupported', reason: 'db-adapter-disabled' });
@@ -226,5 +231,35 @@ describe('syncVectorDB 狀態機', () => {
         expect(report).not.toContain('schema-mismatch');
         const warnings = mock.UI.showMsg.mock.calls.filter((c: any[]) => c[1] === 'warning');
         expect(warnings).toHaveLength(1); // 一次性提示，與 Phase 0 一致
+    });
+
+    // 本版實際發行的路徑（旗標 true）：同樣的誤判 → 指紋改判 → DB adapter 真的上工。
+    it('(9) 旗標開（本版狀態）：誤判 file 經指紋改判後由 DB adapter 完成索引', async () => {
+        mock.App.getInfo = vi.fn(async () => ({ version: '2.0.2' })); // supportDb 缺省
+        const rows = [
+            dbBlockRow('ship-1', 'raw [[uuid]]', '引用 [[ZZTest Apple]] 的區塊', 'ZZTest Apple'),
+            dbBlockRow('ship-2', 'raw two', '純文字區塊', 'Page Two'),
+        ];
+        let dbFetchRan = false;
+        mock.DB.datascriptQuery = vi.fn(async (query: string) => {
+            if (query.includes(':block/title') && query.includes('(pull')) {
+                dbFetchRan = true;
+                return rows.map((r) => [r]);
+            }
+            if (query.includes('(count ?b) . :where [?b :block/title')) return 2;
+            if (query.includes('(count ?b) . :where [?b :block/content')) return 0;
+            if (query.includes('(count')) return 50;
+            return []; // file 查詢：零列
+        });
+
+        const rag = await loadRag();
+        await rag.syncVectorDB();
+
+        expect(dbFetchRan).toBe(true); // 改判後確實走了 DB adapter
+        const st = rag.getIndexState() as any;
+        expect(st.status).toBe('ready');
+        expect(st.blockCount).toBe(2);
+        expect(rag.getRagDiagReport()).toContain('title=2 content=0');
+        expect(rag.getRagDiagReport()).not.toContain('schema-mismatch');
     });
 });

@@ -4,5 +4,6 @@
   "author": "TinkerPump (Hanson)",
   "repo": "hhs456/logseq-impeller-ai",
   "icon": "logo.png",
-  "effect": true
+  "effect": true,
+  "supportsDB": true
 }

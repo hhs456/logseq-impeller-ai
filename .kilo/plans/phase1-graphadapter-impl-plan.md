@@ -233,6 +233,33 @@ nightly 保留單一用途：beta 測出問題時，確認是否已在上游修�
 | 裁定非阻斷 | N3／N4（S8 宿主重繪側欄 DOM，與圖譜類型無關，file 圖在 2.0.2 同樣會中）→ 獨立任務 |
 | N/A | N10 同名頁（2.0.2 宿主建不出同名頁）；N17 實機（暖快取抓不到 supersession，採 `rag-race` 六情境 CI 證據＋N21 實機閘證據） |
 | 記錄不修 | N20 recycle 混入（不在 N0–N17 閘內；不自創屬性名，待正確屬性實證）；N16 跨版本 graph.path 漂移（memory.ts 禁碰，舊資料孤兒化未刪除） |
-| ⏳ 待辦 | **R1**：0.10.x 宿主＋file 圖回歸（§7「每個 phase 發版前必跑」） |
+| ⚠️ **未實測（裁定跳過）** | **R1**：0.10.x 宿主＋file 圖回歸。見 A.6 |
 
-**發版順序（§8，R1 結案後一次做完）**：① 翻 `DB_ADAPTER_ENABLED=true` **＋ 根目錄 `manifest.json` 加 `"supportsDB": true`**（必須同 commit 且在打 tag 前——`publish.yml` 於 build 階段透傳 manifest 欄位，tag 之後才改就會發出不帶 DB 標記的 zip）→ ② 驗證 build 產物含該欄位 → ③ 打 `v0.11.0` tag 並推送，觸發 `publish.yml` 自動建 Release＋zip → ④ 送 `logseq/marketplace` PR（同欄位，不加 `supportsDBOnly`／`unsupportedGraphType`）。
+### A.6 R1 跳過記錄（2026-10-11，用戶裁定）
+
+§7 明文「每個 phase 發版前必跑 R1」。本版**未經真實 0.10.x 宿主實測**即發版，為已知缺口，記錄如下。
+
+**代償證據**（三層，皆非宿主級）：
+1. **快照逐字一致**：五個呼叫點＋`getTxt` 基準與 v0.10.1 零 diff（`tests/__snapshots__/file-graph-output.json` 既有 5 鍵未動）。
+2. **CI 探測情境**：`tests/graph-kind.test.ts` 兩條专门鎖 R1 形狀——`getInfo()` 無 `supportDb` → 判 file 且**零查詢**、永不觸及 `checkCurrentIsDbGraph`；`getInfo()` resolve 成 `undefined` → 判 file 不丟錯。
+3. **181 測試全綠**＋`typecheck`／`build` 綠。
+
+**為何残余風險低**：Phase 1 新增的四條路徑在 file 圖上全部**不執行**——指紋覆核只在 `schema-mismatch` 異常點觸發；`refTitleMap` 只在 `DbGraphAdapter` 內，file 圖永不實例化；`withWorkerRetry` 只在錯誤字串含 `db-worker has not been initialized` 時介入；`diag()` 只寫環形緩衝。唯一在 file 圖上會跑到的是 `main.ts` 啟動閘的一次 `getGraphCacheKey()`（舊 API、已包 try/catch，取不到即放行首個事件）。
+
+**未獲證據的具體主張**：原始需求點名的「暖快取啟動無 toast、`semantic_search` 首次呼叫才彈 `🧠 首次載入…`」在**真實 0.10.x 宿主**上仍然成立——由程式碼推論與 `rag-state` 情境 (6) 單元覆蓋，未經宿主驗證。
+
+**補償動作**：任一 0.10.x 使用者回報 file 圖異常，即以此節為判讀基準；後續若取得舊宿主，補跑 R1 並將本節改為「已實測」。
+
+### A.7 發版順序（2026-10-11 改正）
+
+**先更正一處錯誤指令**：A.5 舊版曾寫「`manifest.json` 必須在打 tag 前改，否則 `publish.yml` 會發出不帶 DB 標記的 zip」——**該說法是錯的**。查證：`publish.yml` 打包 `README.md`＋`package.json`＋`logo.png`＋`dist/`，**不含 `manifest.json`**；外掛身分來自 `package.json` 的 `logseq` 欄位（`id`／`title`／`icon`／`category`）。故 `supportsDB` 與 zip 內容無關，**不存在 tag 順序陷阱**。
+
+`supportsDB` 的真實作用面只有兩個：
+- **`logseq/marketplace` 的 listing metadata** —— DB 使用者在 app 內市集看見「支援 DB」標記與篩選的**唯一來源**
+- **本 repo 根目錄 `manifest.json`** —— 載入「未封裝外掛」時被 app 讀取（今晚兩趟實測即此路徑），保留是為與 marketplace 同步，非發版必要條件
+
+**順序**：
+1. 翻 `DB_ADAPTER_ENABLED=true`（`src/graph/index.ts`）＋ `manifest.json` 加 `"supportsDB": true`（同 commit，維持 repo 內外一致）＋ CHANGELOG 標明 DB 支援啟用與 R1 跳過
+2. `typecheck && test && build` 全綠
+3. 打 `v0.11.0` tag 並推送 → `publish.yml` 自動建 Release＋zip
+4. 送 `logseq/marketplace` PR：改該 repo 內本外掛目錄的 `manifest.json`，加 `"supportsDB": true`；**不加** `supportsDBOnly`、**不加** `unsupportedGraphType`（§8 第 3 條）。`effect: true` 維持原狀（會進較嚴格審查，為既有狀態）

@@ -244,6 +244,7 @@ describe('切圖競態（§4.5／N17）', () => {
         });
 
         const rag = await loadRag();
+        (await import('../src/graph')).__setDbAdapterEnabledForTest(false); // 回滾路徑
         await rag.syncVectorDB();
         expect(rag.getIndexState().status).toBe('ready');
         const callsAfterA = (mock.DB.datascriptQuery as any).mock.calls.length;
@@ -316,6 +317,7 @@ describe('診斷外露（N9 blockCount／N17 丟棄點／N21 切圖計數）', (
         mock.App.checkCurrentIsDbGraph = vi.fn(async () => true);
 
         const rag = await loadRag();
+        (await import('../src/graph')).__setDbAdapterEnabledForTest(false); // 回滾路徑
         await rag.syncVectorDB();
 
         expect(rag.getRagDiagReport()).toContain('db-gated');

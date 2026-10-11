@@ -1,8 +1,9 @@
 // tests/tools-unavailable.test.ts
 // Phase 0 驗收：SearchOutcome → LLM 字串映射，與 DB 圖譜下兩個查詢工具的守衛。
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { installLogseqMock, LogseqMock } from './helpers/logseq-mock';
 import { resetGraphKind } from '../src/graph/kind';
+import { __setDbAdapterEnabledForTest } from '../src/graph';
 
 const ragState = vi.hoisted(() => ({ outcome: null as any, linkedRefsCalls: 0 }));
 
@@ -84,6 +85,11 @@ describe('semantic_search：SearchOutcome → LLM 字串', () => {
 });
 
 describe('DB 圖譜守衛（杜絕靜默空結果）', () => {
+    // 本版旗標為 true（DB 走 adapter，不再回 GRAPH_TYPE_UNSUPPORTED）。
+    // 本 describe 驗的是「翻回 false 的回滾路徑」，故整體強制關，結束後還原。
+    beforeEach(() => __setDbAdapterEnabledForTest(false));
+    afterEach(() => __setDbAdapterEnabledForTest(null));
+
     it('graph_tag_search 在 db → GRAPH_TYPE_UNSUPPORTED，不跑舊查詢', async () => {
         await asDbGraph();
         mock.DB.datascriptQuery = vi.fn(async () => { throw new Error('must not run'); });

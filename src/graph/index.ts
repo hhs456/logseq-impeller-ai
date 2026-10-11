@@ -4,8 +4,9 @@ import { FileGraphAdapter } from './file';
 import { DbGraphAdapter } from './db';
 import type { GraphAdapter, GraphKind } from './types';
 
-// 夜版 N0–N17 全過才翻 true（回滾＝翻回 false；§4.10）
-export const DB_ADAPTER_ENABLED = false;
+// 夜版 N0–N17 已於 2.0.2 beta 實測通過（2026-10-11，見計畫附錄 A.3/A.4/A.5）→ 翻 true。
+// 回滾＝翻回 false（DB 退回 Phase 0 的明確不支援），或整版 revert；無資料遷移。
+export const DB_ADAPTER_ENABLED = true;
 
 interface AdapterCache {
     graphKey: string;
@@ -31,9 +32,18 @@ export async function getAdapter(): Promise<GraphAdapter> {
 
 // DB 圖譜且 adapter 未啟用＝本版本無法讀取 datalog。三個 datalog 表面
 // （rag.ts 的 DB 分支＋tools.ts 兩個守衛）共引此謂詞，維持收攏點。
+//
+// 測試縫（專案慣例同 kind.ts 的 resetGraphKind：production 零呼叫）：
+// null＝採上列常數；測試強制兩態以同時驗證「已啟用」與「回滾仍有效」。
+let enabledOverride: boolean | null = null;
+
+export function __setDbAdapterEnabledForTest(v: boolean | null): void {
+    enabledOverride = v;
+}
+
 export async function isGraphUnsupported(kind?: GraphKind): Promise<boolean> {
     const k = kind ?? await getGraphKind();
-    return k === 'db' && !DB_ADAPTER_ENABLED;
+    return k === 'db' && !(enabledOverride ?? DB_ADAPTER_ENABLED);
 }
 
 // 清 adapter 與 graphKind 快取（§4.4；由 rag.ts 的 onGraphSwitched 呼叫）
