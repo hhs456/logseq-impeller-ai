@@ -4,7 +4,7 @@ import { pipeline, env } from '@huggingface/transformers';
 import { create, insertMultiple, search } from '@orama/orama';
 import { state } from './config';
 import { logger } from './utils/logger';
-import { getGraphKind, getGraphCacheKey } from './graph/kind';
+import { getGraphKind, getGraphCacheKey, getPatientGraphKind } from './graph/kind';
 import { getAdapter, isGraphUnsupported, resetAdapter } from './graph';
 import { diag, diagHistory, countDiag } from './graph/diag';
 import { SIMILARITY_THRESHOLD } from './graph/types';
@@ -97,7 +97,9 @@ async function computeContentHash(content: string): Promise<string> {
 
 // 不 catch：查詢拋錯就讓它逃出，落入 syncVectorDB 的外層 catch
 export async function fetchLogseqBlocks(): Promise<FetchBlocksResult> {
-    const kind = await getGraphKind();
+    // 同步路徑用「有耐心」的探測：2.0.2 階段②（DB 尚在載入）的全零判定
+    // 會退避重探而非誤快取成 file（實測：schema-mismatch 誤報，2026-10-11）
+    const kind = await getPatientGraphKind();
     if (await isGraphUnsupported(kind)) {
         diag('db-gated', 'DB_ADAPTER_ENABLED=false');
         return {
