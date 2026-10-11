@@ -5,18 +5,32 @@ import { create, insertMultiple, search } from '@orama/orama';
 import { state } from './config';
 import { logger } from './utils/logger';
 import { getGraphKind, getGraphCacheKey } from './graph/kind';
-import { getAdapter, isGraphUnsupported } from './graph';
+import { getAdapter, isGraphUnsupported, resetAdapter } from './graph';
 import { SIMILARITY_THRESHOLD } from './graph/types';
 import type { FetchBlocksResult, IndexState, SearchOutcome } from './graph/types';
 
 let extractor: any = null;
 let vectorDb: any = null;
-let isSyncing = false; // 防抖鎖，避免同時觸發多次同步
 let indexState: IndexState = { status: 'idle' };
+// 世代 token（§4.5，沿用 config.ts state.contextGen 的專案慣例）：
+// 取代 isSyncing——多輪同步排隊序列化（同時只有一輪佔用 extractor），
+// 過期輪在每個 await 邊界後丟棄，絕不寫回 vectorDb/indexState。
+let syncGen = 0;
+let syncChain: Promise<unknown> = Promise.resolve();
 const noticedUnsupported = new Set<string>();
 
 export function getIndexState(): IndexState {
     return indexState;
+}
+
+// 圖譜切換的同步重置（§4.5①，handler 第一行）：先讓在飛世代的全部結果作廢，
+// 立即清索引與狀態，再清 adapter/graphKind 快取（切圖＝重算）。
+// 放最前以關閉「事件到 UI 隔離完成」之間舊索引仍可被查詢的窗口。
+export function onGraphSwitched(): void {
+    syncGen++;
+    vectorDb = null;
+    indexState = { status: 'idle' };
+    resetAdapter();
 }
 
 // ==========================================
@@ -102,18 +116,19 @@ async function ensureExtractor() {
     return extractor;
 }
 
-export async function syncVectorDB() {
-    if (isSyncing) return;
-    isSyncing = true;
-    indexState = { status: 'building' };
+async function runSync(gen: number) {
+    indexState = { status: 'building', gen };
+    const stale = () => gen !== syncGen;
 
     try {
         const fetched = await fetchLogseqBlocks();
+        if (stale()) return;
 
         if (fetched.status === 'unsupported') {
+            const noticeKey = `${await getGraphCacheKey()}|${fetched.reason}`;
+            if (stale()) return;
             vectorDb = null;
             indexState = { status: 'unsupported', reason: fetched.reason };
-            const noticeKey = `${await getGraphCacheKey()}|${fetched.reason}`;
             if (!noticedUnsupported.has(noticeKey)) {
                 noticedUnsupported.add(noticeKey);
                 logseq.UI.showMsg(state.t.ragDbUnsupported, "warning", { timeout: 0 });
@@ -134,12 +149,14 @@ export async function syncVectorDB() {
 
         // 🎯 取得當前圖譜資訊，確保多個圖譜的資料在快取中不會互相污染
         const graph = await logseq.App.getCurrentGraph();
+        if (stale()) return;
         const graphName = graph?.name || "default_graph";
 
         const processedBlocks = [];
         const blocksToVectorize = [];
 
         const allHashes = await Promise.all(blocks.map(b => computeContentHash(b.content)));
+        if (stale()) return;
         const hashMap = new Map<string, string>();
         blocks.forEach((b, i) => hashMap.set(b.id, allHashes[i]));
 
@@ -147,6 +164,7 @@ export async function syncVectorDB() {
             const contentHash = hashMap.get(block.id)!;
             const cacheKey = `${graphName}_${block.id}_${contentHash}`;
             const cachedEmbedding = await getCachedEmbedding(cacheKey);
+            if (stale()) return;
 
             if (cachedEmbedding) {
                 processedBlocks.push({ ...block, embedding: cachedEmbedding });
@@ -158,20 +176,22 @@ export async function syncVectorDB() {
         // 🎯 如果有「新成員」，才需要驚動 AI 模型
         if (blocksToVectorize.length > 0) {
             await ensureExtractor();
+            if (stale()) return;
 
             // 💡 動態替換 {count} 變數
             const indexingMsg = (state.t.ragIndexing || "⏳ 發現 {count} 筆新筆記或修改，正在建立神經索引...").replace('{count}', blocksToVectorize.length.toString());
             logseq.UI.showMsg(indexingMsg, "info");
-            
+
             const newEntries: [string, number[]][] = [];
-            
+
             for (const block of blocksToVectorize) {
                 const contextualText = `頁面名稱：【${block.pageName}】\n筆記內容：${block.content}`;
                 const output = await extractor(contextualText, { pooling: 'mean', normalize: true });
+                if (stale()) return;
                 const embedding = Array.from(output.data) as number[];
-                
+
                 processedBlocks.push({ ...block, embedding });
-                
+
                 // 記錄進快取準備清單
                 const cacheKey = `${graphName}_${block.id}_${hashMap.get(block.id)!}`;
                 newEntries.push([cacheKey, embedding]);
@@ -179,6 +199,7 @@ export async function syncVectorDB() {
 
             // 批次寫入快取，效能最高
             await saveCachedEmbeddings(newEntries);
+            if (stale()) return;
             logseq.UI.showMsg(state.t.ragSyncDone || "✅ 增量更新完成！", "success");
         } else {
             // 如果全部命中快取，我們就在背景靜默完成，不打擾使用者
@@ -186,20 +207,31 @@ export async function syncVectorDB() {
         }
 
         // 🎯 最後，將最新的資料灌進 Orama 記憶體中供系統檢索 (此操作在毫秒級)
-        vectorDb = await create({
+        // 世代檢查必须在寫 vectorDb 之前：過期輪（如 A 圖遲到）絕不得佔用當前索引（N17）
+        const db = await create({
             schema: { id: 'string', content: 'string', pageName: 'string', embedding: 'vector[512]' }
         });
-        await insertMultiple(vectorDb, processedBlocks);
+        await insertMultiple(db, processedBlocks);
+        if (stale()) return;
+        vectorDb = db;
         indexState = { status: 'ready', blockCount: processedBlocks.length, builtAt: Date.now() };
 
     } catch (err) {
+        if (stale()) return; // 過期輪的例外不污染新輪狀態、不彈錯
         vectorDb = null; // 不殘留舊圖索引
         indexState = { status: 'failed', message: err instanceof Error ? err.message : String(err) };
         logger.error("向量資料庫同步失敗:", err);
         logseq.UI.showMsg(state.t.ragSyncFailed || "❌ 本地 AI 大腦啟動失敗", "error");
-    } finally {
-        isSyncing = false; // 解除鎖定
     }
+}
+
+// 取代 isSyncing：排隊而非丟棄——同時只有一輪佔用 extractor；
+// 每輪帶世代 token，過期結果在各 await 邊界丟棄。
+export function syncVectorDB(): Promise<unknown> {
+    const gen = ++syncGen;
+    const p = syncChain.then(() => runSync(gen));
+    syncChain = p.catch(() => undefined); // 序列化鏈不因單輪失敗而斷
+    return p;
 }
 
 // ==========================================

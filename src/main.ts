@@ -5,7 +5,7 @@ import { panel } from './panel';
 import { actions } from './actions';
 import { renderUI, scheduleRender } from './ui';
 import { installEventDelegation, uninstallEventDelegation } from './ui/events';
-import { syncVectorDB } from './rag';
+import { syncVectorDB, onGraphSwitched } from './rag';
 import { getStaticPromptParts } from './prompts';
 import { MemoryManager } from './memory';
 import { encryptApiKey, decryptApiKey, AES_PREFIX } from './utils/crypto';
@@ -279,10 +279,14 @@ async function main() {
 
     // --- 圖譜切換監聽 ---
     logseq.App.onCurrentGraphChanged(async () => {
-        // Step 1｜同步等待：先執行輕量的狀態隔離，確保 UI 資料乾淨
+        // Step 1｜同步重置：作廢在飛世代、清索引與 adapter 快取
+        //        （關閉「事件到 UI 隔離完成」之間舊索引仍可被查詢的窗口，§4.5①）
+        onGraphSwitched();
+
+        // Step 2｜狀態隔離：中止進行中 run、洗舊圖聊天快取、載入新圖上下文
         await actions.handleGraphChange();
 
-        // Step 2｜背景非同步：狀態隔離完成後，將耗時的向量庫同步丟到背景執行
+        // Step 3｜背景非同步：新圖專屬向量庫同步（世代 token 序列化，舊圖遲到結果自動丟棄）
         logger.info("🔄 偵測到圖譜切換，正在背景重新載入專屬向量資料庫...");
 
         // ✅ [改善2] 直接複用 initRAG()，錯誤處理邏輯與啟動時完全一致（含 UI 通知）
