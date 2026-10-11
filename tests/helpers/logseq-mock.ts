@@ -41,7 +41,13 @@ export function createLogseqMock(): LogseqMock {
         UI: { showMsg: vi.fn() },
         App: {
             getUserConfigs: vi.fn(async () => ({ preferredLanguage: 'en' })),
-            getCurrentGraph: vi.fn(async () => ({ path: 'D:/graphs/test-graph' })),
+            getCurrentGraph: vi.fn(async () => ({
+                path: 'D:/graphs/test-graph',
+                name: 'test-graph',
+                url: 'logseq://graph/test-graph',
+            })),
+            getInfo: vi.fn(async () => ({ version: '0.10.9' })),
+            checkCurrentIsDbGraph: vi.fn(async () => false),
             registerUIItem: vi.fn(),
             registerCommand: vi.fn(),
             registerCommandPalette: vi.fn(),
@@ -63,9 +69,13 @@ export function createLogseqMock(): LogseqMock {
             removeBlock: vi.fn(async () => undefined),
         },
         DB: {
-            q: vi.fn(async () => []),
-            sync: vi.fn(async () => []),
-            transaction: vi.fn(),
+            // 未 stub 即失敗：避免測試「從未真正執行」查詢路徑
+            q: vi.fn(async () => { throw new Error('unstubbed logseq.DB.q'); }),
+            sync: vi.fn(async () => { throw new Error('unstubbed logseq.DB.sync'); }),
+            transaction: vi.fn(() => { throw new Error('unstubbed logseq.DB.transaction'); }),
+            datascriptQuery: vi.fn(async () => { throw new Error('unstubbed logseq.DB.datascriptQuery'); }),
+            customQuery: vi.fn(async () => { throw new Error('unstubbed logseq.DB.customQuery'); }),
+            onChanged: vi.fn(() => () => {}),
         },
         __beforeunloadCallbacks: [],
     };

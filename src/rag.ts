@@ -5,10 +5,19 @@ import { create, insertMultiple, search } from '@orama/orama';
 import { state } from './config';
 import { escapeDsString } from './utils/query';
 import { logger } from './utils/logger';
+import { getGraphKind, getGraphCacheKey, isGraphUnsupported } from './graph/kind';
+import { SIMILARITY_THRESHOLD } from './graph/types';
+import type { FetchBlocksResult, IndexableBlock, IndexState, SearchOutcome } from './graph/types';
 
 let extractor: any = null;
 let vectorDb: any = null;
 let isSyncing = false; // 防抖鎖，避免同時觸發多次同步
+let indexState: IndexState = { status: 'idle' };
+const noticedUnsupported = new Set<string>();
+
+export function getIndexState(): IndexState {
+    return indexState;
+}
 
 // ==========================================
 // 🚀 IndexedDB 快取系統：持久化保存向量資料
@@ -64,41 +73,100 @@ async function computeContentHash(content: string): Promise<string> {
 // ==========================================
 // 1. 資料抓取與過濾
 // ==========================================
-export async function fetchLogseqBlocks() {
+const CANARY_MIN = 20;
+
+// 零結果時的 canary：只數「有頁面的區塊」總數，不取內容。
+// 有大量區塊卻撈不到內容＝屬性名失效（schema 漂移），回 unsupported 而非靜默空圖。
+async function countPageBlocksCanary(): Promise<number> {
+    const out: any = await logseq.DB.datascriptQuery(
+        `[:find (count ?b) . :where [?b :block/page _]]`
+    );
+    if (typeof out === 'number') return out;
+    if (Array.isArray(out)) {
+        const n = out.flat(Infinity).find((v: any) => typeof v === 'number');
+        return typeof n === 'number' ? n : 0;
+    }
+    return 0;
+}
+
+// 不 catch：查詢拋錯就讓它逃出，落入 syncVectorDB 的外層 catch
+export async function fetchLogseqBlocks(): Promise<FetchBlocksResult> {
+    const kind = await getGraphKind();
+    if (await isGraphUnsupported(kind)) {
+        return {
+            status: 'unsupported',
+            kind,
+            reason: 'db-adapter-disabled',
+            detail: 'DB_ADAPTER_ENABLED=false (Phase 0)',
+        };
+    }
+
     const query = `
         [:find (pull ?b [:block/uuid :block/content {:block/page [:block/original-name :block/name]}])
          :where [?b :block/content ?c]
                 [(not= ?c "")]]
     `;
-    try {
-        const results = await logseq.DB.datascriptQuery(query);
-        if (!results) return [];
-        const blocks = results.flat()
-            .map((block: any) => {
-                const pageName = block.page?.['original-name'] || block.page?.name || "未命名頁面";
-                return {
-                    id: block.uuid,
-                    content: block.content,
-                    pageName: pageName
-                };
-            });
-        return blocks;
-    } catch (error) {
-        logger.error("抓取 Logseq 資料失敗:", error);
-        return [];
+    const results = await logseq.DB.datascriptQuery(query);
+    const blocks: IndexableBlock[] = (results ? results.flat() : []).map((block: any) => {
+        const pageName = block.page?.['original-name'] || block.page?.name || "未命名頁面";
+        return {
+            id: block.uuid,
+            content: block.content,
+            pageName: pageName
+        };
+    });
+
+    if (blocks.length > 0) return { status: 'ok', kind, blocks };
+
+    const canary = await countPageBlocksCanary();
+    if (canary > CANARY_MIN) {
+        return { status: 'unsupported', kind, reason: 'schema-mismatch', detail: `canary=${canary}` };
     }
+    return { status: 'empty', kind };
 }
 
 // ==========================================
 // 2. 智慧增量同步向量資料庫 (支援跨圖譜)
 // ==========================================
+async function ensureExtractor() {
+    if (extractor) return extractor;
+    env.allowLocalModels = false;
+    // 💡 使用 i18n 變數，並加上防呆預設值
+    const msg = state.t.ragInitModel || "🧠 首次載入或更新模型中，需稍候 (約 90MB)...";
+    logseq.UI.showMsg(msg, "info", { timeout: 8000 });
+    extractor = await pipeline('feature-extraction', 'Xenova/bge-small-zh-v1.5');
+    return extractor;
+}
+
 export async function syncVectorDB() {
     if (isSyncing) return;
     isSyncing = true;
-    
+    indexState = { status: 'building' };
+
     try {
-        const blocks = await fetchLogseqBlocks();
-        if (blocks.length === 0) return;
+        const fetched = await fetchLogseqBlocks();
+
+        if (fetched.status === 'unsupported') {
+            vectorDb = null;
+            indexState = { status: 'unsupported', reason: fetched.reason };
+            const noticeKey = `${await getGraphCacheKey()}|${fetched.reason}`;
+            if (!noticedUnsupported.has(noticeKey)) {
+                noticedUnsupported.add(noticeKey);
+                logseq.UI.showMsg(state.t.ragDbUnsupported, "warning", { timeout: 0 });
+            }
+            logger.info(`[RAG] 圖譜索引已停用：${fetched.reason} (${fetched.detail})`);
+            return;
+        }
+
+        if (fetched.status === 'empty') {
+            // 合法狀態：不彈窗，只記日誌
+            vectorDb = null;
+            indexState = { status: 'empty' };
+            logger.info("[RAG] 圖譜掃描完成，沒有可索引的非空區塊。");
+            return;
+        }
+
+        const blocks = fetched.blocks;
 
         // 🎯 取得當前圖譜資訊，確保多個圖譜的資料在快取中不會互相污染
         const graph = await logseq.App.getCurrentGraph();
@@ -125,13 +193,7 @@ export async function syncVectorDB() {
 
         // 🎯 如果有「新成員」，才需要驚動 AI 模型
         if (blocksToVectorize.length > 0) {
-            if (!extractor) {
-                env.allowLocalModels = false; 
-                // 💡 使用 i18n 變數，並加上防呆預設值
-                const msg = state.t.ragInitModel || "🧠 首次載入或更新模型中，需稍候 (約 90MB)...";
-                logseq.UI.showMsg(msg, "info", { timeout: 8000 });
-                extractor = await pipeline('feature-extraction', 'Xenova/bge-small-zh-v1.5');
-            }
+            await ensureExtractor();
 
             // 💡 動態替換 {count} 變數
             const indexingMsg = (state.t.ragIndexing || "⏳ 發現 {count} 筆新筆記或修改，正在建立神經索引...").replace('{count}', blocksToVectorize.length.toString());
@@ -164,8 +226,11 @@ export async function syncVectorDB() {
             schema: { id: 'string', content: 'string', pageName: 'string', embedding: 'vector[512]' }
         });
         await insertMultiple(vectorDb, processedBlocks);
+        indexState = { status: 'ready', blockCount: processedBlocks.length, builtAt: Date.now() };
 
     } catch (err) {
+        vectorDb = null; // 不殘留舊圖索引
+        indexState = { status: 'failed', message: err instanceof Error ? err.message : String(err) };
         logger.error("向量資料庫同步失敗:", err);
         logseq.UI.showMsg(state.t.ragSyncFailed || "❌ 本地 AI 大腦啟動失敗", "error");
     } finally {
@@ -176,23 +241,39 @@ export async function syncVectorDB() {
 // ==========================================
 // 3. 工具介接：語意搜尋與圖譜搜尋
 // ==========================================
-export async function searchSimilarBlocks(queryText: string) {
-    if (!vectorDb || !extractor) return [];
+type UnavailableReason = Extract<SearchOutcome, { status: 'unavailable' }>['reason'];
+
+function unavailableReasonFromIndexState(s: IndexState): UnavailableReason {
+    switch (s.status) {
+        case 'building': return 'building';
+        case 'empty': return 'empty-graph';
+        case 'unsupported': return 'unsupported';
+        case 'failed': return 'failed';
+        default: return 'idle';
+    }
+}
+
+export async function searchSimilarBlocks(queryText: string): Promise<SearchOutcome> {
+    if (!vectorDb) {
+        return { status: 'unavailable', reason: unavailableReasonFromIndexState(indexState) };
+    }
     try {
+        // 修 F：暖快取啟動時 extractor 可能是 null，lazy 載入而非回空
+        if (!extractor) await ensureExtractor();
         const queryEmbedding = await extractor(queryText, { pooling: 'mean', normalize: true });
         const results = await search(vectorDb, {
             mode: 'vector',
             vector: { value: Array.from(queryEmbedding.data), property: 'embedding' },
-            similarity: 0.3, 
+            similarity: SIMILARITY_THRESHOLD, 
             limit: 5, 
         });
-        return results.hits.map(hit => ({
+        return { status: 'ok', hits: results.hits.map((hit: any) => ({
             id: hit.document.id,
             content: `(來自頁面 [[${hit.document.pageName}]]) ${hit.document.content}`
-        }));
+        })) };
     } catch (err) {
         logger.error("向量搜尋失敗:", err);
-        return [];
+        return { status: 'unavailable', reason: 'search-error' };
     }
 }
 

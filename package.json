@@ -1,6 +1,6 @@
 {
   "name": "logseq-impeller-ai",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "type": "module",
   "description": "A universal, LLM-agnostic sidebar assistant for Logseq. Features a native sidebar chat interface, agentic RAG tools (semantic search, graph queries, web search), and task cancellation control.",
   "main": "dist/index.html",
@@ -15,6 +15,7 @@
   "devDependencies": {
     "@logseq/libs": "^0.0.17",
     "@types/dompurify": "^3.2.0",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^25.0.1",
     "terser": "^5.48.0",
     "typescript": "^5.0.0",

@@ -1,0 +1,42 @@
+{
+  "fetchLogseqBlocks": {
+    "blocks": [
+      {
+        "content": "first block about Apple
+second line",
+        "id": "aaaa-1",
+        "pageName": "Alpha",
+      },
+      {
+        "content": "無頁名測試",
+        "id": "aaaa-2",
+        "pageName": "未命名頁面",
+      },
+      {
+        "content": "contains "quotes" & <angles>",
+        "id": "aaaa-3",
+        "pageName": "Beta Gamma",
+      },
+    ],
+    "kind": "file",
+    "status": "ok",
+  },
+  "getLinkedReferencesForPage": "Here are all the notes associated with [[Apple]]:
+- [[Alpha]]: refers to [[Apple]] from body
+- [[Beta Gamma]]: another ref",
+  "get_page_outline": "【Alpha 的大綱結構】
+- [UUID: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa] Chapter One more...
+  (此區塊內部還包含 1 個子節點/子行程式碼)
+- [UUID: cccccccc-cccc-cccc-cccc-cccccccccccc] Chapter Two...
+
+💡 系統提示：請根據上述大綱，挑選與任務最相關的區塊 UUID，並呼叫 read_target_block 工具讀取細節。",
+  "global_keyword_search": "【搜尋 "Apple" 的全域結果】
+- [檔案/頁面: alpha] (UUID: aaaa-1) : first block about Apple second line...
+- [檔案/頁面: beta gamma] (UUID: aaaa-3) : contains "quotes" & <angles>...
+
+💡 系統提示：請根據上述結果找出包含目標宣告的檔案，再使用 get_page_outline 深入閱讀。",
+  "read_target_block": "Chapter One
+more
+nested text
+",
+}

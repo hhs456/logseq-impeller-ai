@@ -1,6 +1,6 @@
 # 🌀 Impeller AI
 
-![Version](https://img.shields.io/badge/version-v0.10.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.10.1-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Logseq](https://img.shields.io/badge/Logseq-Plugin-0f172a?logo=logseq)
 
@@ -40,6 +40,13 @@ Impeller AI deeply integrates with Logseq's block ecosystem. It is not just a ch
 * **Visible Chat Controls & Markdown Clipboard**: Copy, Regenerate and Delete controls are shown directly beneath each bubble (no hover required). Copying extracts pre-processed pure Markdown from the DOM, preventing HTML pollution.
 * **Collapsible Tool Traces**: Agentic tool calls (semantic search, graph queries, web search) record a collapsible **tool trace** under the answer, showing each tool, its arguments and timing — persisted with the message but never sent back to the API.
 * **Non-Blocking & Exportable**: Supports manual task cancellation via `AbortController`. Export entire chat histories (including tool execution traces) to clean Markdown via the Command Palette (`export-ai-chat`).
+
+---
+
+### ⚠️ Graph Compatibility (v0.10.1)
+
+* **File-based graphs**: fully supported; behavior is unchanged.
+* **Logseq DB graphs**: **not supported yet.** The plugin now detects a DB graph at startup and explicitly disables semantic search and graph queries with a one-time warning — it will never silently answer "no relevant notes found" on a DB graph again. DB graph support is planned for v0.11.x.
 
 ---
 

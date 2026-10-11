@@ -1,6 +1,6 @@
 # 🌀 Impeller AI
 
-![Version](https://img.shields.io/badge/version-v0.10.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.10.1-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Logseq](https://img.shields.io/badge/Logseq-Plugin-0f172a?logo=logseq)
 
@@ -40,6 +40,13 @@ Impeller AI 深度整合了 Logseq 的區塊（Block）生態系統。它不僅�
 * **常駐的對話控制項與 Markdown 剪貼簿**：複製、重新生成、刪除等控制項直接顯示於每個氣泡下方（無需滑過懸停）。複製功能會從 DOM 提取預處理過的純 Markdown，防止 HTML 污染。
 * **可收合的工具軌跡**：Agentic 工具呼叫（語意搜尋、圖譜查詢、聯網搜尋）會在回覆下方記錄可收合的**工具軌跡**，顯示每個工具、其參數與耗時——軌跡會隨訊息持久化，但絕不回傳給 API。
 * **非阻塞與可匯出**：支援透過 `AbortController` 手動取消生成任務。您可以輕鬆地透過命令面板（`export-ai-chat`）將整個聊天紀錄（包含深度的工具執行軌跡）匯出為乾淨的 Markdown 檔案。
+
+---
+
+### ⚠️ 圖譜相容性（v0.10.1）
+
+* **檔案型圖譜（file-based graph）**：完整支援，行為不變。
+* **Logseq DB 圖譜**：**尚未支援。** 外掛現在會在啟動時偵測 DB 圖譜，並以一次性警告明確停用語意搜尋與圖譜查詢——絕不會再對 DB 圖譜靜默回答「找不到相關筆記」。DB 圖譜支援預計於 v0.11.x 推出。
 
 ---
 

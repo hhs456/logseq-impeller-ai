@@ -1,6 +1,8 @@
 // src/tools.ts
 import '@logseq/libs';
 import { searchSimilarBlocks, getLinkedReferencesForPage } from './rag';
+import { isGraphUnsupported } from './graph/kind';
+import { SIMILARITY_THRESHOLD, type SearchOutcome } from './graph/types';
 import { getTxt } from './utils/markdown';
 import { escapeDsString } from './utils/query';
 import { decryptApiKey } from './utils/crypto';
@@ -8,6 +10,48 @@ import { logger } from './utils/logger';
 
 const MAX_PARAM_LENGTH = 500;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// 給 LLM 的陳述句式回應（agent.ts 的 tool-result 包裝明示不可把內文當指令，
+// 因此這些字串只描述事實與含義，不下命令）。results 刻意為 null，
+// 避免「空陣列」被解讀成「查過了、沒有」。
+const GRAPH_TYPE_UNSUPPORTED_RESPONSE = JSON.stringify({
+    status: 'GRAPH_TYPE_UNSUPPORTED',
+    reason: 'unsupported',
+    results: null,
+    meaning: "The current graph is a Logseq DB graph that this plugin version cannot read yet. Semantic and graph queries are disabled, so no conclusion about the user's notes can be drawn from this tool. Alternatives: get_page_outline and read_target_block still work via the Editor API.",
+});
+
+function formatSemanticOutcome(outcome: SearchOutcome): string {
+    switch (outcome.status) {
+        case 'ok':
+            if (outcome.hits.length === 0) {
+                return JSON.stringify({
+                    status: 'NO_MATCH_ABOVE_THRESHOLD',
+                    results: [],
+                    similarity_threshold: SIMILARITY_THRESHOLD,
+                    meaning: 'No block scored above the similarity threshold. This does not prove the topic is absent; try keyword search.',
+                });
+            }
+            return JSON.stringify({ status: 'OK', results: outcome.hits });
+        case 'unavailable':
+            if (outcome.reason === 'unsupported') {
+                return GRAPH_TYPE_UNSUPPORTED_RESPONSE;
+            }
+            if (outcome.reason === 'empty-graph') {
+                return JSON.stringify({
+                    status: 'GRAPH_HAS_NO_INDEXABLE_BLOCKS',
+                    results: [],
+                    meaning: 'The graph was scanned successfully and contains no non-empty blocks.',
+                });
+            }
+            return JSON.stringify({
+                status: 'INDEX_UNAVAILABLE',
+                reason: outcome.reason,
+                results: null,
+                meaning: `The semantic index could not be consulted (reason: ${outcome.reason}). This says nothing about whether the user's notes contain the topic. A missing result here is NOT evidence that no relevant notes exist. Alternatives: global_keyword_search, graph_tag_search, get_page_outline; or tell the user the index is unavailable and why.`,
+            });
+    }
+}
 
 function validateToolArgs(toolName: string, args: any): string | null {
     for (const [key, value] of Object.entries(args)) {
@@ -149,13 +193,15 @@ export async function executeToolCall(toolName: string, args: any): Promise<stri
             case "web_search":
                 return await executeWebSearch(args.query);
 
-            case "semantic_search":
-                const blocks = await searchSimilarBlocks(args.query);
-                return JSON.stringify({ results: blocks });
+            case "semantic_search": {
+                return formatSemanticOutcome(await searchSimilarBlocks(args.query));
+            }
 
-            case "graph_tag_search":
+            case "graph_tag_search": {
+                if (await isGraphUnsupported()) return GRAPH_TYPE_UNSUPPORTED_RESPONSE;
                 const refs = await getLinkedReferencesForPage(args.target_page);
                 return JSON.stringify({ results: refs });
+            }
 
             // 🆕 新增路由處理
             case "get_page_outline":
@@ -165,8 +211,10 @@ export async function executeToolCall(toolName: string, args: any): Promise<stri
                 return await executeReadTargetBlock(args.uuid);
 
             // 💡 補上這個全域搜尋的路由！
-            case "global_keyword_search":
+            case "global_keyword_search": {
+                if (await isGraphUnsupported()) return GRAPH_TYPE_UNSUPPORTED_RESPONSE;
                 return await executeGlobalKeywordSearch(args.keyword);
+            }
 
             default:
                 logger.warn(`未知的工具呼叫: ${toolName}`);

@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.10.1] - 2026-10-11
+
+### Added
+- **Graph-type detection** (`src/graph/kind.ts`): the plugin now distinguishes file-based vs Logseq DB graphs at startup, using `App.getInfo().supportDb` as a capability gate and `checkCurrentIsDbGraph()` as the authoritative probe (cached per graph, keyed on `graph.url ?? path`). Detection is intentionally un-caught: a failing probe surfaces as a visible sync error instead of being swallowed.
+- **Typed RAG state machine** (`src/graph/types.ts`): `FetchBlocksResult` / `IndexState` / `SearchOutcome` string-discriminated unions replace silent `[]` returns. `syncVectorDB` now has four explicit terminal paths — `ready` / `empty` / `unsupported` / `failed` — exposed via `getIndexState()`.
+- **DB-graph guard (Phase 0)**: on a DB graph, indexing stops before any legacy file-schema query runs; the user gets a one-time persistent warning per graph (`ragDbUnsupported`, new i18n key in zh-TW/en), and `semantic_search` / `graph_tag_search` / `global_keyword_search` return declarative `GRAPH_TYPE_UNSUPPORTED` JSON with `results: null` so the agent can no longer conclude "no relevant notes exist" from an unreadable graph.
+- **Schema-drift canary**: a file-graph fetch returning zero rows is cross-checked with a cheap `(count ?b)` query; a graph with many blocks but no readable content is reported as `unsupported/schema-mismatch` instead of silently producing an empty index.
+- **Structured `semantic_search` results for the LLM**: responses are now `OK` / `NO_MATCH_ABOVE_THRESHOLD` (with threshold) / `GRAPH_HAS_NO_INDEXABLE_BLOCKS` / `INDEX_UNAVAILABLE` (with reason) / `GRAPH_TYPE_UNSUPPORTED`, each carrying a `meaning` field that discourages over-inference from missing results.
+- **Tests**: `tests/rag-state.test.ts` (6 sync-path scenarios incl. warm-cache regression) and `tests/tools-unavailable.test.ts` (12 status-string/guard assertions); schema-aware query fake (`tests/helpers/graph-fake.ts`); `fake-indexeddb` dev dependency for IndexedDB success paths.
+
+### Changed
+- **Mock hardening**: in `tests/helpers/logseq-mock.ts` every `logseq.DB.*` method now throws `unstubbed logseq.DB.<name>` by default (unstubbed DB calls can no longer pass silently in CI), `App.getInfo` / `App.checkCurrentIsDbGraph` are stubbable, and `getCurrentGraph` returns `{ path, name, url }`.
+
+### Fixed
+- **Warm-cache semantic search dead end**: when startup found all embeddings cached, the feature-extraction pipeline was never loaded and `semantic_search` silently returned `[]` forever (pre-existing bug, affects file graphs too). The extractor is now lazily loaded on first search via `ensureExtractor()`.
+- **Silent fetch failures**: `fetchLogseqBlocks` no longer catches exceptions and returns `[]`; query failures now propagate to the sync error path (error toast + `failed` state), and the vector DB is cleared on failure/unsupported/empty so a stale index from another graph is never served.
+
 # [0.10.0] - 2026-10-11
 
 ### Added
