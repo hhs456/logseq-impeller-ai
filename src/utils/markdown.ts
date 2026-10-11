@@ -2,6 +2,7 @@
 import { Marked, type Tokens } from 'marked';
 import DOMPurify from 'dompurify';
 import { highlightCode } from './highlight';
+import { blockText } from '../graph/text';
 
 /**
  * 基本的 HTML 溢出字元跳脫處理
@@ -18,7 +19,7 @@ export function escapeHTML(str: string): string {
 
 export function getTxt(tree: any[]): string {
     return tree.reduce(
-        (acc: string, b: any) => acc + (b.content ?? '') + '\n' + (b.children ? getTxt(b.children) : ''),
+        (acc: string, b: any) => acc + blockText(b) + '\n' + (b.children ? getTxt(b.children) : ''),
         ''
     );
 }

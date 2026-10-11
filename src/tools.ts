@@ -1,10 +1,10 @@
 // src/tools.ts
 import '@logseq/libs';
 import { searchSimilarBlocks, getLinkedReferencesForPage } from './rag';
-import { isGraphUnsupported } from './graph/kind';
+import { getAdapter, isGraphUnsupported } from './graph';
+import { getGraphKind } from './graph/kind';
 import { SIMILARITY_THRESHOLD, type SearchOutcome } from './graph/types';
 import { getTxt } from './utils/markdown';
-import { escapeDsString } from './utils/query';
 import { decryptApiKey } from './utils/crypto';
 import { logger } from './utils/logger';
 
@@ -230,16 +230,17 @@ export async function executeToolCall(toolName: string, args: any): Promise<stri
  * 3. 具體工具實作區
  */
 
-// 🆕 實作：獲取頁面大綱
+// 🆕 實作：獲取頁面大綱（經 adapter.pageTree；file 輸出逐字不變）
 async function executeGetPageOutline(pageName: string): Promise<string> {
-    const blocks = await logseq.Editor.getPageBlocksTree(pageName);
+    const adapter = await getAdapter();
+    const blocks = await adapter.pageTree(pageName);
     if (!blocks || blocks.length === 0) {
         return JSON.stringify({ error: `找不到頁面『${pageName}』或頁面內容為空。` });
     }
 
     let outline = `【${pageName} 的大綱結構】\n`;
-    blocks.forEach((b: any) => {
-        const preview = b.content.substring(0, 70).replace(/\n/g, " ");
+    blocks.forEach((b) => {
+        const preview = b.text.substring(0, 70).replace(/\n/g, " ");
         outline += `- [UUID: ${b.uuid}] ${preview}...\n`;
         if (b.children && b.children.length > 0) {
             outline += `  (此區塊內部還包含 ${b.children.length} 個子節點/子行程式碼)\n`;
@@ -250,14 +251,23 @@ async function executeGetPageOutline(pageName: string): Promise<string> {
     return outline;
 }
 
-// 🆕 實作：精準讀取特定區塊樹
+// 🆕 實作：精準讀取特定區塊樹（經 adapter.blockTree）
 async function executeReadTargetBlock(uuid: string): Promise<string> {
-    const block = await logseq.Editor.getBlock(uuid, { includeChildren: true });
-    if (!block) return JSON.stringify({ error: "找不到此區塊，可能已被刪除。" });
+    const adapter = await getAdapter();
+    const node = await adapter.blockTree(uuid);
+    if (!node) {
+        // 計畫決策 #6：DB 對頁面 uuid 回「找不到」是已知行為（N13）；
+        // 補一次純讀探測，把「頁面」與「不存在」分開講（file 路徑零額外呼叫）
+        if ((await getGraphKind()) === 'db') {
+            const page = await logseq.Editor.getPage(uuid);
+            if (page) {
+                return JSON.stringify({ error: "此 uuid 是頁面而非區塊，請改用 get_page_outline 讀取頁面大綱。" });
+            }
+        }
+        return JSON.stringify({ error: "找不到此區塊，可能已被刪除。" });
+    }
 
-    const totalContent = block.content + '\n' + (block.children ? getTxt(block.children) : '');
-
-    return totalContent;
+    return node.text + '\n' + getTxt(node.children);
 }
 
 // 原本就寫得很好的 Web Search
@@ -295,32 +305,22 @@ export async function executeWebSearch(query: string) {
     }
 }
 
-// 修改後的全域搜尋實作
+// 修改後的全域搜尋實作（查詢經 adapter.keywordSearch；報告格式逐字不變）
 export async function executeGlobalKeywordSearch(keyword: string): Promise<string> {
     try {
-        const escapedKeyword = escapeDsString(keyword);
-        const query = `
-            [:find (pull ?b [*])
-             :where
-             [?b :block/content ?c]
-             [(clojure.string/includes? ?c "${escapedKeyword}")]]
-        `;
-        const results = await logseq.DB.datascriptQuery(query);
+        const adapter = await getAdapter();
+        const hits = await adapter.keywordSearch(keyword, 10);
 
-        if (!results || results.length === 0) {
+        if (hits.length === 0) {
             return `No results found for keyword: ${keyword}`;
         }
 
         // 💡 修正：把 \\n 改成 \n
         let report = `【搜尋 "${keyword}" 的全域結果】\n`;
-        
-        const limitedResults = results.slice(0, 10);
-        for (const res of limitedResults) {
-            const block = res[0];
-            const page = await logseq.Editor.getPage(block.page.id);
-            const pageName = page ? page.name : "Unknown Page";
+
+        for (const hit of hits) {
             // 💡 修正：正則表達式的 /\\n/g 改成 /\n/g，結尾的 \\n 改成 \n
-            report += `- [檔案/頁面: ${pageName}] (UUID: ${block.uuid}) : ${block.content.substring(0, 50).replace(/\n/g, " ")}...\n`;
+            report += `- [檔案/頁面: ${hit.pageTitle}] (UUID: ${hit.uuid}) : ${hit.text.substring(0, 50).replace(/\n/g, " ")}...\n`;
         }
 
         // 💡 修正：把 \\n 改成 \n

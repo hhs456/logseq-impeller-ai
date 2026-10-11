@@ -3,11 +3,11 @@ import '@logseq/libs';
 import { pipeline, env } from '@huggingface/transformers';
 import { create, insertMultiple, search } from '@orama/orama';
 import { state } from './config';
-import { escapeDsString } from './utils/query';
 import { logger } from './utils/logger';
-import { getGraphKind, getGraphCacheKey, isGraphUnsupported } from './graph/kind';
+import { getGraphKind, getGraphCacheKey } from './graph/kind';
+import { getAdapter, isGraphUnsupported } from './graph';
 import { SIMILARITY_THRESHOLD } from './graph/types';
-import type { FetchBlocksResult, IndexableBlock, IndexState, SearchOutcome } from './graph/types';
+import type { FetchBlocksResult, IndexState, SearchOutcome } from './graph/types';
 
 let extractor: any = null;
 let vectorDb: any = null;
@@ -71,23 +71,8 @@ async function computeContentHash(content: string): Promise<string> {
 }
 
 // ==========================================
-// 1. 資料抓取與過濾
+// 1. 資料抓取（經 GraphAdapter；schema 知識收斂在 src/graph/*）
 // ==========================================
-const CANARY_MIN = 20;
-
-// 零結果時的 canary：只數「有頁面的區塊」總數，不取內容。
-// 有大量區塊卻撈不到內容＝屬性名失效（schema 漂移），回 unsupported 而非靜默空圖。
-async function countPageBlocksCanary(): Promise<number> {
-    const out: any = await logseq.DB.datascriptQuery(
-        `[:find (count ?b) . :where [?b :block/page _]]`
-    );
-    if (typeof out === 'number') return out;
-    if (Array.isArray(out)) {
-        const n = out.flat(Infinity).find((v: any) => typeof v === 'number');
-        return typeof n === 'number' ? n : 0;
-    }
-    return 0;
-}
 
 // 不 catch：查詢拋錯就讓它逃出，落入 syncVectorDB 的外層 catch
 export async function fetchLogseqBlocks(): Promise<FetchBlocksResult> {
@@ -97,32 +82,11 @@ export async function fetchLogseqBlocks(): Promise<FetchBlocksResult> {
             status: 'unsupported',
             kind,
             reason: 'db-adapter-disabled',
-            detail: 'DB_ADAPTER_ENABLED=false (Phase 0)',
+            detail: 'DB_ADAPTER_ENABLED=false (Phase 1, flag off)',
         };
     }
-
-    const query = `
-        [:find (pull ?b [:block/uuid :block/content {:block/page [:block/original-name :block/name]}])
-         :where [?b :block/content ?c]
-                [(not= ?c "")]]
-    `;
-    const results = await logseq.DB.datascriptQuery(query);
-    const blocks: IndexableBlock[] = (results ? results.flat() : []).map((block: any) => {
-        const pageName = block.page?.['original-name'] || block.page?.name || "未命名頁面";
-        return {
-            id: block.uuid,
-            content: block.content,
-            pageName: pageName
-        };
-    });
-
-    if (blocks.length > 0) return { status: 'ok', kind, blocks };
-
-    const canary = await countPageBlocksCanary();
-    if (canary > CANARY_MIN) {
-        return { status: 'unsupported', kind, reason: 'schema-mismatch', detail: `canary=${canary}` };
-    }
-    return { status: 'empty', kind };
+    const adapter = await getAdapter();
+    return adapter.fetchAllBlocks();
 }
 
 // ==========================================
@@ -279,23 +243,16 @@ export async function searchSimilarBlocks(queryText: string): Promise<SearchOutc
 
 export async function getLinkedReferencesForPage(targetPage: string) {
     try {
-        const lowerPageName = escapeDsString(targetPage.toLowerCase().replace(/^#/, ''));
-        const linkedRefsQuery = `
-            [:find (pull ?b [:block/content {:block/page [:block/original-name]}])
-             :where [?p :block/name "${lowerPageName}"]
-                    [?b :block/refs ?p]]
-        `;
-        const queryResults = await logseq.DB.datascriptQuery(linkedRefsQuery);
-        const flatRefs = queryResults?.flat() || [];
+        const adapter = await getAdapter();
+        const refs = await adapter.blocksReferencingPage(targetPage);
 
-        if (flatRefs.length === 0) {
+        if (refs.length === 0) {
             // 💡 傳給 AI 的參考上下文也可以加上 i18n，但這裡為了讓 AI 看懂，預設使用直白的敘述
             return (state.t.ragNoRefsFound || `知識庫中沒有找到與 [[{targetPage}]] 關聯的筆記。`).replace('{targetPage}', targetPage);
         }
 
-        const resultString = flatRefs.map((b: any) => {
-            const fromPage = b.page?.['original-name'] || "未知頁面";
-            return `- [[${fromPage}]]: ${b.content}`;
+        const resultString = refs.map((r) => {
+            return `- [[${r.fromPage}]]: ${r.text}`;
         }).join("\n");
 
         const prefix = state.t.ragRefsFound || `以下是所有關聯到 [[{targetPage}]] 的筆記：\n`;

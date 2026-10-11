@@ -1,6 +1,7 @@
 // tests/markdown.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
-import { renderMarkdown, clearMarkdownCache } from '../src/utils/markdown';
+import { renderMarkdown, clearMarkdownCache, getTxt } from '../src/utils/markdown';
+import { blockText, pageDisplayName, slug } from '../src/graph/text';
 
 beforeEach(() => {
     clearMarkdownCache();
@@ -127,5 +128,61 @@ describe('P2a: memoize（D10）', () => {
         for (let i = 0; i < 250; i++) renderMarkdown(`chunk-${i}`);
         const again = renderMarkdown('first');
         expect(again).toBe(first);
+    });
+});
+
+// ─────────────────────────────────────────────
+// Phase 1：blockText / getTxt / pageDisplayName / slug（§4.1 修 G/H、§4.7）
+// ─────────────────────────────────────────────
+describe('Phase 1: blockText 優先序（text > fullTitle > full-title > content > title > ""）', () => {
+    it('六段鏈逐段退化', () => {
+        expect(blockText({ text: 't', fullTitle: 'f', 'full-title': 'k', content: 'c', title: 'ti' })).toBe('t');
+        expect(blockText({ fullTitle: 'f', 'full-title': 'k', content: 'c' })).toBe('f');
+        expect(blockText({ 'full-title': 'k', content: 'c', title: 'ti' })).toBe('k');
+        expect(blockText({ content: 'c', title: 'ti' })).toBe('c');
+        expect(blockText({ title: 'ti' })).toBe('ti');
+        expect(blockText({})).toBe('');
+        expect(blockText(null)).toBe('');
+        expect(blockText(undefined)).toBe('');
+    });
+});
+
+describe('Phase 1: getTxt 經 blockText（修 G：缺值不产出 undefined 字串）', () => {
+    it('file 實體（只有 content）與 v0.10.1 逐字等價', () => {
+        const tree = [{ uuid: 'a', content: 'line1\nline2', children: [{ uuid: 'b', content: 'child' }] }];
+        expect(getTxt(tree)).toBe('line1\nline2\nchild\n');
+    });
+
+    it('DB 實體取 fullTitle 優先於 content（[[uuid]] 噪音不入上下文）', () => {
+        const tree = [{ uuid: 'a', fullTitle: 'Read [[Page]]', content: 'raw [[uuid]]' }];
+        expect(getTxt(tree)).toBe('Read [[Page]]\n');
+    });
+
+    it('全缺值區塊回空字串而非 "undefined"', () => {
+        const tree = [{ uuid: 'a', children: [{ uuid: 'b' }] }];
+        expect(getTxt(tree)).toBe('\n\n');
+        expect(getTxt(tree)).not.toContain('undefined');
+    });
+});
+
+describe('Phase 1: pageDisplayName / slug', () => {
+    it('pageDisplayName file：originalName || name（逐字現行）', () => {
+        expect(pageDisplayName({ originalName: 'Apple', name: 'apple' }, 'file')).toBe('Apple');
+        expect(pageDisplayName({ name: 'apple' }, 'file')).toBe('apple');
+        expect(pageDisplayName({ originalName: '', name: 'apple' }, 'file')).toBe('apple');
+        expect(pageDisplayName({}, 'file')).toBe('');
+    });
+
+    it('pageDisplayName db：title || originalName || name（修 H）', () => {
+        expect(pageDisplayName({ title: 'Apple', name: 'apple' }, 'db')).toBe('Apple');
+        expect(pageDisplayName({ originalName: 'Legacy', name: 'apple' }, 'db')).toBe('Legacy');
+        expect(pageDisplayName({ name: 'apple' }, 'db')).toBe('apple');
+        expect(pageDisplayName({}, 'db')).toBe('');
+    });
+
+    it('slug：小寫＋去首 #，兩種後端共用（§4.7）', () => {
+        expect(slug('#Apple')).toBe('apple');
+        expect(slug('Beta Gamma')).toBe('beta gamma');
+        expect(slug('中文頁')).toBe('中文頁');
     });
 });
