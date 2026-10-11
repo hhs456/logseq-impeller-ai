@@ -181,3 +181,31 @@ nightly 保留單一用途：beta 測出問題時，確認是否已在上游修�
 **待辦（範圍外，另開任務）**：
 1. 側欄改用官方 sidebar renderer（`logseq.API` 的 `:plugin` block-type / `get-hosted-renderers`），取代 `provideUI` 硬塞——解 N3／N4。
 2. `graph.path` 跨版本穩定性調查＋可能的聊天遷移——解 N16「舊版不在」。
+
+### A.3 第二趟（旗標開，本地）實測結果（2026-10-11，2.0.2 beta，圖＝生活日誌，1684 可索引區塊）
+
+> 旗標僅在工作區翻開測試，測畢已還原；HEAD 全程 `false`，未產生任何提交。
+
+| # | 結果 | 證據 |
+|---|---|---|
+| N1 | ✅ | 首輪同步即見 `probe-fingerprint title=2780 content=0` → `probe-reclassify → db` |
+| N9 count | ✅ | `hostCount:1684 == pluginBlockCount:1684`，**完全相符、無膨脹** |
+| N9 解析 | ✅ | P5：`full-title` = `引用 [[ZZTest Apple]] 與 #ZZCompany 的區塊`——**可讀名**，datalog＋refs pull 路徑乾淨 |
+| N10 tags 支 | ✅ | `#ZZCompany` 被 `[?b :block/tags ?p]` 分支抓回（`(or refs tags)` 兩支皆有效） |
+| N10 同名頁 | N/A | 2.0.2 宿主**建不出同名頁**；查詢寫法對未來開放時仍正確，不追 nightly |
+| N11 | ✅（帶已知限制） | P6b：純文字 `事件系統`=1、`家長會談`=2、含連結的 `ZZTest`=null → `includes?` **正常**；漏掉「只以連結顯示名出現」的文字＝§4.3 預告限制，非缺陷 |
+| N12 結構 | ✅ | array:true、缺頁→null、節點含 uuid/content/fullTitle |
+| N12 巢狀 | ✅ | NEST2：`parents:408`、該頁 `roots:3 / total:28` → 25 個子孫正確嵌套，**未壓平** |
+| N13 | ✅ | 區塊 uuid → 回文；**頁面 uuid → null**（計畫預期），tools 該說「是頁面」 |
+| **N14** | **❌** | P9：`raw-has-uuid-link:true`。**根因**：Editor API 的 `fullTitle` 對連結**保留 raw `[[uuid]]`**，不像 datalog 的 `full-title`（refs pull）會解析。受影響＝頁面上下文（`agent.ts`）、`get_page_outline` 預覽、`read_target_block` 全文——凡含連結的區塊 |
+| N15 | ✅ | 導航正常、不創空白頁 |
+| N16 | ✅／⚠️ | 本版內重啟歷史在；跨版本（0.10.x→2.0.2）舊聊天孤兒化於舊 `graph.path` key，**未刪除** |
+| N17 | 裁定跳過 | 暖快取同步過快抓不到 supersession；採 `rag-race.test.ts` 六情境 CI 證據＋N21 實機閘證據 |
+| N20 | ❌（不在閘內） | P10：刪頁後 `["ZZTest Trash"]` 仍被查到 → recycle 區塊混入索引。§8 閘只鎖 N0–N17，故不阻斷發版；**不自創屬性名**，待有正確屬性後再修 |
+
+**N14 的定位（重要，供決策）**：對 DB 使用者而言，v0.11.0-flag-on 仍**嚴格優於** v0.10.1——三個 datalog 工具從「完全不能用」變成可用且索引乾淨，頁面上下文噪音與 v0.10.1 相同（未回歸）。但照 §7 字面 N14 未過，翻旗標與否需用戶裁定。
+
+**修復選項**：
+- **(a) 先發版、另開任務修**：接受噪音（僅含連結的區塊受影響，純文字區塊乾淨）。
+- **(b) 修後再發版（建議）**：`db.ts` 的 `pageTree`/`blockTree` 維持 Editor API 取**結構**，另以**一條已驗證的 refs-pull 查詢**取該頁所有區塊的 `full-title`，建 uuid→可讀名 map，走樹取代 `text`。成本：每次工具呼叫多 1–2 條查詢（工具頻率低，非熱路徑）；**复用今晚已實證的查詢形狀**（P5／P3），不新增 [未證] 屬性面。純 JS 樹走代，可單元測試覆蓋。
+- **(c) 改走 datalog 重構樹**：需 `:block/parent`／`:block/order` 等**未驗證**欄位，擴大 [未證] 面，發版前不宜。
