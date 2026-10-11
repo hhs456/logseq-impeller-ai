@@ -262,4 +262,26 @@ nightly 保留單一用途：beta 測出問題時，確認是否已在上游修�
 1. 翻 `DB_ADAPTER_ENABLED=true`（`src/graph/index.ts`）＋ `manifest.json` 加 `"supportsDB": true`（同 commit，維持 repo 內外一致）＋ CHANGELOG 標明 DB 支援啟用與 R1 跳過
 2. `typecheck && test && build` 全綠
 3. 打 `v0.11.0` tag 並推送 → `publish.yml` 自動建 Release＋zip
-4. 送 `logseq/marketplace` PR：改該 repo 內本外掛目錄的 `manifest.json`，加 `"supportsDB": true`；**不加** `supportsDBOnly`、**不加** `unsupportedGraphType`（§8 第 3 條）。`effect: true` 維持原狀（會進較嚴格審查，為既有狀態）
+4. 送 `logseq/marketplace` PR：**首次提交**（非更新，見 A.8）——在該 repo 建 `packages/logseq-impeller-ai/`，放入 `manifest.json`（含 `"supportsDB": true`）與 icon 檔。**不加** `supportsDBOnly`、**不加** `unsupportedGraphType`（後者非有效欄位）。`effect: true` 維持原狀（既有狀態，會進較嚴格審查）
+
+### A.8 marketplace 查證（2026-10-11，發版後）
+
+**更正計畫 §8 第 3 條的前提**：來源計畫寫「既有條目隨 GitHub Release 更新」——**查證結果是沒有既有條目**。`logseq/marketplace` 的 `packages/` 共 **639** 個目錄，對 `impeller`／`hhs456`／`Universal LLM` **零筆**命中；`packages/logseq-impeller-ai` 直接 404。故本輪是**首次提交**，不是更新，門檻較高（需 icon 入庫、README 有示意圖、Release 帶 zip）。
+
+**Release 產物已就緒**（`publish.yml` 自動完成）：
+- `v0.11.0` 已公開發布（`draft:false`、`prerelease:false`），作者 `github-actions[bot]`
+- 附件 `logseq-impeller-ai.zip`，7,164,103 bytes，`sha256:02b41c7d7c072b96ed6b2f2b4fd14dc9a44ac5d3a7ac5c610e909860d5d12ecd`
+- 另有 `source code (zip)`——marketplace 前置檢查第 1 項滿足
+
+**欄位清單查證**（取自 marketplace README 與真實套件 `packages/db-block-extractor`）：
+- 有效欄位含 `supportsDB`（預設 false）與 `supportsDBOnly`（預設 false）
+- **`unsupportedGraphType` 不是有效欄位**——計畫 S13 的更正於此再次確認；舊欄位不得写入
+- `effect: true` 會進較嚴格審查（README 明示「不建議非必要就開」）；本外掛為既有狀態
+- 無 `category` 欄位（`package.json` 的 `logseq.category` 僅供本機識別，marketplace 不用）
+- package 目錄內容為 `manifest.json` ＋ icon 檔（`db-block-extractor` 帶 `icon.png`），故 icon 需**一併放入 marketplace 目錄**
+
+**首次提交前置檢查**：
+- ✅ Release 帶 zip
+- ✅ README 有示意圖（`README.md:96` YouTube 縮圖＋連結）
+- ✅ `logo.png` 存在於 repo 根
+- ⚠️ 須主動揭露：R1 未實測（A.6）、N20 recycle 混入、N3／N4 側欄需點兩次（宿主相容、file 亦然）
