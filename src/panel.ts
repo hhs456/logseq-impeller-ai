@@ -47,8 +47,8 @@ export const panel = {
         renderUI();
     },
     
-    async copyMsg(e: any) {
-        const msgIndex = parseInt(e.dataset.index, 10);
+    async copyMsg(msgIndex: number) {
+        if (Number.isNaN(msgIndex)) return;
         const pageUuid = state.currentPageUuid;
 
         if (!pageUuid) return;
@@ -60,8 +60,8 @@ export const panel = {
         }
     },
 
-    async deleteMsg(e: any) {
-        const msgIndex = parseInt(e.dataset.index, 10);
+    async deleteMsg(msgIndex: number) {
+        if (Number.isNaN(msgIndex)) return;
         const pageUuid = state.currentPageUuid;
 
         if (!pageUuid || !state.chatStore[pageUuid]) return;
@@ -86,21 +86,21 @@ export const panel = {
         const chat = state.chatStore[targetUuid];
         const markdownContent = `# AI Chat: ${chat.name}\n\n` + chat.msgs.map(m => {
             const roleStr = m.role as string;
-            const roleName = roleStr === 'user' ? '🧑 **You**' : (roleStr === 'tool' ? '🛠️ **System**' : '🤖 **AI**');
-            
-            // 💡 匯出時也格式化時間
+            const roleName = roleStr === 'user' ? '🧑 **You**' : '🤖 **AI**';
             const timeStr = m.timestamp ? ` _(${new Date(m.timestamp).toLocaleString()})_` : '';
-            
             return `${roleName}${timeStr}:\n${m.content}`;
         }).join('\n\n---\n\n');
 
         const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
-        const a = window.parent.document.createElement('a'); 
+        const a = window.parent.document.createElement('a');
         a.href = url;
-        a.download = `Impeller_Chat_${chat.name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}.md`;
+        a.download = `Impeller_Chat_${chat.name.replace(/[^a-zA-Z0-9一-龥]/g, '_')}.md`;
+        a.style.display = 'none';
+        window.parent.document.body.appendChild(a);
         a.click();
-        URL.revokeObjectURL(url);
+        window.parent.document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
 
         const successMsg = (state.t.exportSuccess || `✅ 已匯出對話：{name}`).replace('{name}', chat.name);
         logseq.UI.showMsg(successMsg, 'success');

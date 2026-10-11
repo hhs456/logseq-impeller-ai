@@ -1,28 +1,101 @@
 // src/ui.ts
 import '@logseq/libs';
 import { state } from './config';
-import { actions } from './actions';
-import { agent } from './agent';
 import { SIDEBAR_CSS } from './ui/styles';
 import { buildHeader, buildMemorySection, buildChatHistory, buildInputArea } from './ui/components';
-import { panel } from './panel';
+import { renderMarkdown } from './utils/markdown';
+import { MemoryManager } from './memory';
+import { logger } from './utils/logger';
 
-let stylesInjected = false;
+let lastBusyState = false;
+let lastMemVersion = -1;
+let lastMemCollapsed: boolean | null = null;
 
-export function renderUI() {
+function focusTextareaIfAppropriate() {
+    const textarea = parent.document.getElementById('ai-sidebar-textarea') as HTMLTextAreaElement | null;
+    if (!textarea) return;
+    const active = parent.document.activeElement;
+    const container = parent.document.getElementById('ai-sidebar-container');
+    const focusIsFree = !active || active === parent.document.body || (container !== null && container.contains(active));
+    const selection = parent.getSelection?.();
+    const selectionCollapsed = !selection || selection.isCollapsed;
+    if (focusIsFree && selectionCollapsed) {
+        textarea.focus();
+    }
+}
+
+// 初次掛載聚焦：有限輪詢（≤ 20 次 × 100ms），找到 textarea 就 focus 一次
+function focusOnMount(attemptsLeft = 20) {
+    const textarea = parent.document.getElementById('ai-sidebar-textarea') as HTMLTextAreaElement | null;
+    if (textarea) {
+        fitSidebarContainer();
+        if (!state.isBusy) textarea.focus();
+        return;
+    }
+    if (attemptsLeft <= 0) return;
+    setTimeout(() => focusOnMount(attemptsLeft - 1), 100);
+}
+
+// V8 解決方案：不猜 --ai-sidebar-offset，直接測量容器到側欄可視區底部的真實可用高度。
+// 關鍵：必須用「內容座標」而非 viewport 座標，否則側欄被捲動時測量值會漂移，
+// 造成 re-render 時容器被撐高、操作區推出畫面（切頁回饋循環）。
+const FIT_MIN_HEIGHT = 280;
+const FIT_MARGIN = 8;
+let fitListenerInstalled = false;
+
+function findScrollAncestor(el: HTMLElement): HTMLElement | null {
+    let n = el.parentElement;
+    while (n && n !== parent.document.documentElement) {
+        const cs = parent.getComputedStyle(n);
+        if (/(auto|scroll)/.test(cs.overflowY)) return n;
+        n = n.parentElement;
+    }
+    return null;
+}
+
+function fitSidebarContainer() {
+    const el = parent.document.getElementById('ai-sidebar-container') as HTMLElement | null;
+    if (!el) return;
+    if (state.isCollapsed) {
+        el.style.height = '';
+        return;
+    }
+    let avail: number;
+    const ancestor = findScrollAncestor(el);
+    if (ancestor) {
+        const aRect = ancestor.getBoundingClientRect();
+        const eRect = el.getBoundingClientRect();
+        const offsetInContent = eRect.top - aRect.top + ancestor.scrollTop;
+        avail = ancestor.clientHeight - offsetInContent - FIT_MARGIN;
+    } else {
+        avail = parent.innerHeight - el.getBoundingClientRect().top - FIT_MARGIN;
+    }
+    el.style.height = Math.max(FIT_MIN_HEIGHT, Math.floor(avail)) + 'px';
+}
+
+function installFitListener() {
+    if (fitListenerInstalled) return;
+    fitListenerInstalled = true;
+    parent.addEventListener('resize', () => scheduleRender());
+}
+
+function renderUIInner() {
+    const justFinishedBusy = lastBusyState && !state.isBusy;
+    lastBusyState = state.isBusy;
+
     if (!state.isVisible) {
         logseq.provideUI({ key: 'ai-sidebar', template: '' });
         return;
     }
 
-    if (!stylesInjected) {
-        logseq.provideStyle({ key: 'ai-sidebar-styles', style: SIDEBAR_CSS });
-        stylesInjected = true;
-    }
+    logseq.provideStyle({ key: 'ai-sidebar-styles', style: SIDEBAR_CSS });
 
     const currentData = state.currentPageUuid && state.chatStore[state.currentPageUuid]
         ? state.chatStore[state.currentPageUuid]
         : { msgs: [] };
+
+    const savedPages = MemoryManager.getAllSavedPages();
+    const memVersion = MemoryManager.getIndexVersion();
 
     let busyMessage = state.t.thinking;
     if (state.isBusy && state.processingPageUuid && state.processingPageUuid !== state.currentPageUuid) {
@@ -30,59 +103,55 @@ export function renderUI() {
         busyMessage = state.t.processingOther.replace('{name}', processingName);
     }
 
-    // 🔍 尋找大樓（最外層容器）是否已經蓋好了
     const containerEl = parent.document.getElementById('ai-sidebar-container');
 
     if (!containerEl) {
         // --------------------------------------------------------
-        // 🏗️ 階段 A：初次渲染 (核彈級大重建，只有第一次打開才會執行)
+        // 🏗️ 階段 A：初次渲染（只有第一次打開才會執行）
         // --------------------------------------------------------
         const template = `
-            <div id="ai-sidebar-container" style="display: flex; flex-direction: column; ${state.isCollapsed ? 'height: auto;' : 'height: calc(100vh - 100px); min-height: 400px;'} box-sizing: border-box; padding: 10px;">
-                <div style="display: flex; flex-direction: column; ${state.isCollapsed ? '' : 'height: 100%;'} background: var(--ls-primary-background-color); border: 1px solid var(--ls-border-color); border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
-                    
+            <div id="ai-sidebar-container" class="ai-container${state.isCollapsed ? ' is-collapsed' : ''}">
+                <div class="ai-shell">
                     <div id="ai-sidebar-header-wrapper">${buildHeader(state.isCollapsed, state.t.aiBtnText)}</div>
-                    
-                    <div id="ai-sidebar-body-wrapper" style="display: ${state.isCollapsed ? 'none' : 'flex'}; flex-direction: column; flex: 1; overflow: hidden;">
-                        
-                        <div id="ai-sidebar-memory-wrapper">${buildMemorySection(state.isMemoryCollapsed)}</div>
-                        
-                        <!-- 📦 將歷史對話用 wrapper 包起來，這是待會要進行局部替換的「目標圖層」 -->
-                        <div id="ai-sidebar-history-wrapper" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                    <div id="ai-sidebar-body-wrapper" class="ai-body">
+                        <div id="ai-sidebar-memory-wrapper">${buildMemorySection(state.isMemoryCollapsed, savedPages)}</div>
+                        <div id="ai-sidebar-history-wrapper" class="ai-history-wrapper">
                             ${buildChatHistory(currentData.msgs, state.isBusy, busyMessage, state.t.welcome)}
                         </div>
-                        
-                        <!-- 📦 輸入框圖層，生出來之後就絕對不再用 innerHTML 摧毀它 -->
-                        <div id="ai-sidebar-input-wrapper">${buildInputArea(state.t.placeholder, state.isBusy)}</div>
-                        
+                        <div id="ai-sidebar-input-wrapper">${buildInputArea(state.t.placeholder, state.isBusy, state.tempInput)}</div>
                     </div>
                 </div>
+                <div id="ai-sidebar-status" class="ai-visually-hidden" role="status" aria-live="polite"></div>
             </div>
         `;
 
         logseq.provideUI({ key: 'ai-sidebar', path: '#right-sidebar .sidebar-item-list', template });
-
-        // 第一次蓋好大樓，延遲綁定事件與計算高度
-        setTimeout(() => {
-            const historyEl = parent.document.getElementById('ai-sidebar-history');
-            if (historyEl) historyEl.scrollTop = historyEl.scrollHeight;
-            setupStaticEventListeners();
-        }, 100);
+        lastMemVersion = memVersion;
+        lastMemCollapsed = state.isMemoryCollapsed;
+        installFitListener();
+        fitSidebarContainer();
+        focusOnMount();
 
     } else {
         // --------------------------------------------------------
-        // 🛠️ 階段 B：PRO 級局部差分更新 (DOM Diffing，無閃爍、不掉焦點)
+        // 🛠️ 階段 B：局部差分更新（無閃爍、不掉焦點）
         // --------------------------------------------------------
-        
-        const bodyWrapper = parent.document.getElementById('ai-sidebar-body-wrapper');
-        if (bodyWrapper) bodyWrapper.style.display = state.isCollapsed ? 'none' : 'flex';
+
+        containerEl.classList.toggle('is-collapsed', state.isCollapsed);
+        fitSidebarContainer();
 
         // 1. 更新 Header 與 Memory
         const headerWrapper = parent.document.getElementById('ai-sidebar-header-wrapper');
         if (headerWrapper) headerWrapper.innerHTML = buildHeader(state.isCollapsed, state.t.aiBtnText);
 
+        // P4：run 進行中且索引未變 → 跳過 chip 列重寫，避免 hover／捲動位置被重置
         const memoryWrapper = parent.document.getElementById('ai-sidebar-memory-wrapper');
-        if (memoryWrapper) memoryWrapper.innerHTML = buildMemorySection(state.isMemoryCollapsed);
+        const skipMemory = state.run !== null && memVersion === lastMemVersion && state.isMemoryCollapsed === lastMemCollapsed;
+        if (memoryWrapper && !skipMemory) {
+            memoryWrapper.innerHTML = buildMemorySection(state.isMemoryCollapsed, savedPages);
+        }
+        lastMemVersion = memVersion;
+        lastMemCollapsed = state.isMemoryCollapsed;
 
         // 2. 核心滾動防禦：先記錄現在的位置
         const historyElBefore = parent.document.getElementById('ai-sidebar-history');
@@ -94,112 +163,131 @@ export function renderUI() {
             savedScrollTop = historyElBefore.scrollTop;
         }
 
-        // 3. 瞬間抽換對話內容 (因為外層 DOM 沒死，滾動條不會跳回 0)
+        // 3. 瞬間抽換對話內容
         const historyWrapper = parent.document.getElementById('ai-sidebar-history-wrapper');
         if (historyWrapper) {
             historyWrapper.innerHTML = buildChatHistory(currentData.msgs, state.isBusy, busyMessage, state.t.welcome);
-            
-            // ⚡ 因為是局部替換，瀏覽器會在同一毫秒內瞬間算好高度，我們可以直接無延遲強制對齊，做到 0 閃爍！
+
             const historyElAfter = parent.document.getElementById('ai-sidebar-history');
             if (historyElAfter) {
                 if (shouldScrollToBottom) {
                     historyElAfter.scrollTop = historyElAfter.scrollHeight;
                 } else {
                     historyElAfter.scrollTop = savedScrollTop;
-                }                
+                }
             }
         }
 
-        // 4. 🔒 終極焦點防護：只切換 readonly
+        // 4. 🔒 終極焦點防護：只切換 readonly，不搶焦點
         const textarea = parent.document.getElementById('ai-sidebar-textarea') as HTMLTextAreaElement;
         if (textarea) {
-            // 用 readonly 取代 disabled
             textarea.readOnly = state.isBusy;
             textarea.style.opacity = state.isBusy ? '0.5' : '1';
             textarea.style.cursor = state.isBusy ? 'not-allowed' : 'text';
-            
+
             if (textarea.value !== state.tempInput) {
                 textarea.value = state.tempInput;
             }
-            if (!state.isBusy) {
-                setTimeout(() => {
-                    textarea.focus();
-                    // 👑 絕招：強制重繪文字游標！就算 Chromium 卡住，這行指令也會逼它把游標畫在文字最末端
-                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-                }, 50);
-            }
         }
 
-        // 5. 動態修改送出按鈕的狀態與文字
-        const sendBtn = parent.document.querySelector('#ai-sidebar-input-wrapper button:last-child') as HTMLButtonElement;
+        // busy→idle 轉換時，只在焦點空閒時歸還輸入框
+        if (justFinishedBusy) {
+            setTimeout(focusTextareaIfAppropriate, 50);
+        }
+
+        // 5. 動態切換 Send/Stop：只改 data-ai-act、文字與 class
+        const sendBtn = parent.document.getElementById('ai-sidebar-send') as HTMLButtonElement;
         if (sendBtn) {
-            if (state.isBusy) {
-                sendBtn.innerHTML = '🛑 Stop';
-                sendBtn.setAttribute('data-on-click', 'stopTask');
-                sendBtn.style.background = 'var(--ls-error-background-color, #ff4d4f)';
-                sendBtn.style.color = 'white';
-            } else {
-                sendBtn.innerHTML = '➤ Send';
-                sendBtn.setAttribute('data-on-click', 'sendMsg');
-                sendBtn.style.background = 'var(--ls-quaternary-background-color)';
-                sendBtn.style.color = '';
-            }
+            sendBtn.setAttribute('data-ai-act', state.isBusy ? 'stopTask' : 'sendMsg');
+            sendBtn.textContent = state.isBusy ? state.t.stop : state.t.send;
+            sendBtn.className = state.isBusy
+                ? 'ai-btn-action ai-send-toggle ai-stop-btn'
+                : 'ai-btn-action ai-send-toggle ai-send-btn';
         }
     }
 }
 
-// 🎯 這個函數的生命週期中只會被呼叫「一次」，徹底根絕多重定時器與事件打架的問題
-// 🎯 將底部的事件綁定替換為「永生代理模式」
-function setupStaticEventListeners() {
-    const textarea = parent.document.getElementById('ai-sidebar-textarea') as HTMLTextAreaElement;
-    if (textarea) {
-        textarea.value = state.tempInput;
-        textarea.oninput = (e: any) => { state.tempInput = e.target.value; };
-        textarea.onkeydown = (e) => {
-            if (["ArrowUp", "ArrowDown", "Enter"].includes(e.key)) e.stopPropagation();
-            if (e.key === "Enter" && !e.shiftKey && !state.isBusy) {
-                e.preventDefault(); 
-                const sendBtn = parent.document.querySelector('[data-on-click="sendMsg"]') as HTMLElement;
-                if (sendBtn) sendBtn.click();
-            }
-        };
-        if (!state.isBusy) {
-            setTimeout(() => {
-                textarea.focus();
-                // 👑 絕招：強制重繪文字游標
-                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-            }, 50);
-        }
+// 3b：renderUI 外層 try/catch，錯誤只記錄不拋出，避免單一渲染失敗拖垮整個外掛
+export function renderUI() {
+    try {
+        renderUIInner();
+    } catch (err) {
+        logger.error('[UI] renderUI 失敗:', err);
     }
+}
 
-    // 🛡️ 核心防禦：綁定在絕對不會被 innerHTML 摧毀的 ai-sidebar-history-wrapper 上
-    const historyWrapper = parent.document.getElementById('ai-sidebar-history-wrapper');
-    if (historyWrapper) {
-        historyWrapper.onclick = async (e: any) => {
-            // 1. 攔截雙鏈跳轉
-            const wikiLink = e.target.closest('a[data-on-click="openPage"], .ai-chat-page-link');
-            if (wikiLink) {
-                e.preventDefault(); 
-                e.stopPropagation(); 
-                await actions.openPage({ dataset: { pageName: wikiLink.getAttribute('data-page-name') } });
-                return; // 執行完就中斷
-            }
+// 3b：rAF 尾端節流——同一幀內多次請求只執行最後一次
+let renderScheduled = false;
+export function scheduleRender() {
+    if (renderScheduled) return;
+    renderScheduled = true;
+    const raf = (parent as any).requestAnimationFrame ?? requestAnimationFrame;
+    raf.call(parent, () => {
+        renderScheduled = false;
+        renderUI();
+    });
+}
 
-            // 2. 攔截所有被 Logseq 遺棄的動作按鈕 (Delete, Copy, Retry)
-            const actionBtn = e.target.closest('.ai-action-link');
-            if (actionBtn) {
-                e.preventDefault(); 
-                e.stopPropagation();
-                
-                const actionType = actionBtn.getAttribute('data-on-click');
-                const index = actionBtn.getAttribute('data-index');
-                const payload = { dataset: { index } };
+// D6：視覺隱藏 status 區，僅在 4 個節點更新（開始思考／完成／中止／錯誤）
+// 不對氣泡區套用 aria-live，避免串流逐字朗讀
+export function setSidebarStatus(text: string) {
+    const el = parent.document.getElementById('ai-sidebar-status');
+    if (el) el.textContent = text;
+}
 
-                // ⚡ 自己的按鈕自己路由，不靠 Logseq 系統
-                if (actionType === 'deleteMsg') await panel.deleteMsg(payload);
-                if (actionType === 'copyMsg') await panel.copyMsg(payload);
-                if (actionType === 'regenerateMsg') await agent.regenerateMsg(payload);
-            }
-        };
+// ─────────────────────────────────────────────
+// P6a：串流熱路徑。只更新暫態氣泡，不重建 history／memory
+// ─────────────────────────────────────────────
+export function scrollToBottomIfPinned() {
+    const h = parent.document.getElementById('ai-sidebar-history');
+    if (!h) return;
+    const threshold = 50;
+    if ((h.scrollHeight - h.scrollTop - h.clientHeight) <= threshold) {
+        h.scrollTop = h.scrollHeight;
     }
+}
+
+const STREAM_PAINT_MIN_INTERVAL_MS = 80;
+let streamRafPending = false;
+let streamLastPaint = 0;
+let streamPendingText: string | null = null;
+
+function ensureStreamBubble(): HTMLElement | null {
+    const history = parent.document.getElementById('ai-sidebar-history');
+    if (!history) return null;
+    let el = parent.document.getElementById('ai-stream-bubble');
+    if (!el) {
+        el = parent.document.createElement('div');
+        el.id = 'ai-stream-bubble';
+        el.className = 'chat-bubble-container is-assistant';
+        el.innerHTML = '<div class="ai-bubble-assistant"><div class="ai-bubble-content"></div></div>';
+        const busy = history.querySelector('.ai-busy');
+        if (busy) history.insertBefore(el, busy);
+        else history.appendChild(el);
+    }
+    return el;
+}
+
+function paintStreamBubble() {
+    streamRafPending = false;
+    // 完成後可能仍有排程中的回調：僅在 busy 時繪製，避免殘留暫態氣泡
+    if (!state.isBusy || !streamPendingText || !streamPendingText.trim()) return;
+    streamLastPaint = performance.now();
+    const el = ensureStreamBubble();
+    if (!el) return;
+    const content = el.querySelector('.ai-bubble-content');
+    if (content) content.innerHTML = renderMarkdown(streamPendingText, { highlight: false });
+    scrollToBottomIfPinned();
+}
+
+export function renderStreamDelta(text: string) {
+    // 空／純空白 delta 不建氣泡（工具回合常見：模型先呼叫工具、尚無文字）
+    if (!text || !text.trim()) return;
+    streamPendingText = text;
+    if (streamRafPending) return;
+    streamRafPending = true;
+    const raf = (parent as any).requestAnimationFrame ?? requestAnimationFrame;
+    const elapsed = performance.now() - streamLastPaint;
+    const delay = Math.max(0, STREAM_PAINT_MIN_INTERVAL_MS - elapsed);
+    setTimeout(() => raf.call(parent, paintStreamBubble), delay);
 }

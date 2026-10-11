@@ -1,34 +1,38 @@
+// src/utils/clipboard.ts
 import '@logseq/libs';
 import { logger } from './logger';
 
 export async function copyToClipboard(text: string, successLabel: string): Promise<void> {
+    const doc = window.parent.document;
     try {
         await window.parent.navigator.clipboard.writeText(text);
         logseq.UI.showMsg(successLabel, 'success');
+        return;
     } catch (err) {
-        const textArea = window.parent.document.createElement("textarea");
-        textArea.value = text;
-        textArea.style.position = "fixed";
-        textArea.style.opacity = "0";
+        logger.warn('[Impeller AI] clipboard.writeText 失敗，降級使用已棄用的 execCommand("copy")。', err);
+    }
 
-        window.parent.document.body.appendChild(textArea);
+    const previousActive = doc.activeElement as HTMLElement | null;
+    const textArea = doc.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.opacity = '0';
+    doc.body.appendChild(textArea);
+
+    try {
         textArea.focus();
         textArea.select();
-
-        try {
-            logger.warn('[Impeller AI] clipboard.writeText 失敗，降級使用已棄用的 execCommand("copy")。');
-            const successful = window.parent.document.execCommand('copy');
-            window.parent.document.body.removeChild(textArea);
-
-            if (successful) {
-                logseq.UI.showMsg(`${successLabel} (fallback)`, 'success');
-            } else {
-                throw new Error('execCommand returned false');
-            }
-        } catch (fallbackErr) {
-            window.parent.document.body.removeChild(textArea);
-            logger.error('Clipboard copy failed:', err, fallbackErr);
+        const successful = doc.execCommand('copy');
+        if (successful) {
+            logseq.UI.showMsg(`${successLabel} (fallback)`, 'success');
+        } else {
             logseq.UI.showMsg('❌ Copy failed', 'error');
         }
+    } catch (fallbackErr) {
+        logger.error('Clipboard copy failed:', fallbackErr);
+        logseq.UI.showMsg('❌ Copy failed', 'error');
+    } finally {
+        if (textArea.isConnected) doc.body.removeChild(textArea);
+        previousActive?.focus();
     }
 }

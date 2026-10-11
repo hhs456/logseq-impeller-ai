@@ -1,6 +1,6 @@
 # 🌀 Impeller AI
 
-![Version](https://img.shields.io/badge/version-v0.9.7-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.10.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Logseq](https://img.shields.io/badge/Logseq-Plugin-0f172a?logo=logseq)
 
@@ -29,16 +29,16 @@ Impeller AI deeply integrates with Logseq's block ecosystem. It is not just a ch
 * **Full-Graph Semantic Scanning**: The RAG indexing pipeline now scans every non-empty block across the entire graph, removing the legacy filter that restricted embedding to blocks containing `[[wiki-links]]` or `#tags`. This ensures comprehensive semantic coverage for knowledge retrieval.
 
 ### 🌳 Native Block & Context Processing
-* **AST-to-Nested Blocks**: Bypasses plain text limitations. An internal AST parser (`parseMarkdownToTree`) converts AI Markdown directly into Logseq's native nested parent-child blocks. It also auto-prepends a horizontal divider and custom tag (e.g., `--- \n#AI`) for visual cleanliness.
-* **Auto Bi-Directional Linking**: Prompt-level constraints instruct the AI to automatically identify core concepts and wrap them in `<span class="logseq-page-ref">Wiki-links</span>` during generation.
+* **Clickable Wiki-Links**: Chat replies may contain clickable `[[bidirectional links]]`; clicking one navigates to the page when it exists (missing pages are flagged instead of silently created).
 * **Advanced Memory Management & Auto-Compression**: Powered by an upgraded `MemoryManager` that utilizes a sliding window approach combined with lossless compression. This significantly expands the effective context capacity without risking token overflow, seamlessly preserving your long-term conversation context.
 
 ### ✨ Polished Sidebar Workflow
-* **Persistent History & Timestamps (New in v0.9.0!)**: Introduced a permanent chat history system with a paginated list, allowing effortless navigation to resume past sessions. Every interaction is grounded with precise timestamps (`YYYY-MM-DD HH:mm`).
-* **Sidebar Layout Refactor (New in v0.9.0!)**: Ergonomically optimized sidebar interface that intelligently occupies full width for maximum readability.
-* **Rich Markdown Rendering**: Full native Markdown rendering out of the box. Output effortlessly displays layered **Headers**, precise **Links**, native **Lists**, elegant **Blockquotes**, complex **Tables**, and syntax-highlighted **Code** blocks.
-* **Smart Apply Logic**: The "Apply" command dynamically analyzes chat context. It intelligently switches between `applyReformat` (pure structural indentation fixing without adding text) and `applyContext` (appending newly generated blocks).
-* **Zero-Friction Markdown Clipboard**: Hovering over chat messages reveals intuitively re-positioned controls (Copy, Regenerate, Delete). Copying extracts pre-processed pure Markdown directly from the DOM, preventing HTML pollution.
+* **Persistent History & Timestamps**: A permanent per-page chat history backed by a lightweight index, surfaced as a horizontal **memory rail** of past chats above the conversation for one-click resume. Every interaction is grounded with precise timestamps (`YYYY-MM-DD HH:mm`).
+* **Sidebar Layout Refactor**: Ergonomically optimized sidebar interface that intelligently occupies full width for maximum readability.
+* **Token-by-Token Streaming**: Replies stream over SSE by default, rendering incrementally into the answer bubble. Endpoints that reject `stream:true` automatically fall back to a full reply, and malformed/incomplete tool-call fragments are never executed on abort.
+* **Rich Markdown Rendering & Syntax Highlighting**: Full native Markdown out of the box — layered **Headers**, **Links**, **Lists**, **Blockquotes**, complex **Tables**, GFM task lists, and **syntax-highlighted Code** blocks (14 languages via highlight.js, light/dark aware).
+* **Visible Chat Controls & Markdown Clipboard**: Copy, Regenerate and Delete controls are shown directly beneath each bubble (no hover required). Copying extracts pre-processed pure Markdown from the DOM, preventing HTML pollution.
+* **Collapsible Tool Traces**: Agentic tool calls (semantic search, graph queries, web search) record a collapsible **tool trace** under the answer, showing each tool, its arguments and timing — persisted with the message but never sent back to the API.
 * **Non-Blocking & Exportable**: Supports manual task cancellation via `AbortController`. Export entire chat histories (including tool execution traces) to clean Markdown via the Command Palette (`export-ai-chat`).
 
 ---
@@ -59,13 +59,12 @@ Impeller AI deeply integrates with Logseq's block ecosystem. It is not just a ch
 The Impeller UI lives permanently inside your **Right Sidebar**, acting as a persistent creative companion across pages.
 
 - **Toggle Sidebar**: Click the **AI Assistant** link in your toolbar to show/hide the panel.
-- **Conversations**: Write your instructions at the input box. Press `Enter` to submit or `Shift+Enter` for a newline. Navigate previous sessions easily with the new **paginated chat history**.
-- **Chat Node Actions**: Hover over any response bubble to reveal ergonomically re-positioned node controls:
+- **Conversations**: Write your instructions at the input box. Press `Enter` to submit or `Shift+Enter` for a newline. Resume past chats from the **memory rail** above the conversation.
+- **Chat Node Actions**: Controls are shown beneath each bubble:
   - **📋 Copy**: Instantly snapshots responses (bypasses iframe sandbox boundaries).
   - **⏹️ Delete**: Destroys the prompt node and safely slices all forward context to maintain continuity.
   - **🔄 Regenerate**: Force re-evaluates the node step with automatic structural rollback safeguards.
 - **Action Buttons**:
-  - **✒️ Format**: Executes contextual page layout rewrites or insight insertion.
   - **🧹 Clear**: Flushes the active page's thread store to restart fresh. Includes a **failsafe confirmation mechanism** to prevent accidental context deletion.
   - **■ Stop**: Kills hanging remote server requests while gracefully preserving tool logs and partial traces.
   - **📥 Export**: Instantly exports your conversation logs and system tool execution traces into structured local Markdown files.
@@ -80,7 +79,7 @@ Adjust the values directly inside the official Logseq Plugin Settings panel:
 - **Model**: Your target LLM deployment identifier (e.g., `openai/gpt-4o-mini`, compatible with any standard OpenAI-spec formats).
 - **Base Path**: Custom connection routing. Ideal for connecting with OpenRouter, API gateways, or disconnected local endpoints (e.g., Ollama / LM Studio).
 - **Web Search API Key**: *(Optional)* Insert your Tavily API string to unlock real-time search grounding and automated factual checking.
-- **Custom Tag**: Define the tag header for inserted structural updates (e.g., `#AI`). Impeller natively prepends a clean `---` horizontal division rule right before the block for cleaner layout visuals.
+- **Enable Streaming (SSE)**: *(Default on)* Token-by-token replies. Endpoints that reject streaming automatically fall back to full replies.
 - **Smart Indexing Performance**: Initial setup processes a full sync pass across your graph nodes; all successive workflows load instantly via localized difference cache layers.
 
 ---

@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.10.0] - 2026-10-11
+
+### Added
+- **Test & CI infrastructure**: `vitest` + `jsdom` unit/e2e suite (`tests/`), `npm run typecheck`/`npm test`, and a new `.github/workflows/ci.yml` running typecheck → test → build on every push/PR. `publish.yml` now runs `npm test` before building.
+- **Token-by-token streaming (SSE)**: replies stream into the answer bubble by default (`enableStreaming`, default on). New pure-function layer `src/llm/stream.ts` (`parseSSE`, `ToolCallAccumulator`). Degradation paths: server-ignored stream → JSON parse; `stream:true` rejected with 4xx → automatic one-shot non-stream retry (remembered per `basePath|model` for the session). Idle/connect timeouts (60 s each) enforced.
+- **Syntax highlighting**: fenced code blocks are highlighted via `highlight.js` core with 14 explicitly registered languages (incl. Lua). Hand-written light/dark theme through `--ai-hl-*` variables; oversized blocks (>20 000 chars) and unknown languages fall back to escaping.
+- **Collapsible tool traces**: each agentic run records a `ToolTraceEntry[]` trace (tool name, argument summary, status, duration) shown under the answer and persisted with the message. Traces are UI-only — never sent to the API or folded into the compression summary.
+- **Per-page drafts**: the input draft is kept per page, so switching pages no longer loses an unsent message.
+- **`Impeller AI: Purge other graphs' chats` command**: manual, confirm-gated cleanup that deletes `impeller_chat_*` keys belonging to other graphs (never auto-run; current graph untouched).
+- **Accessibility**: semantic `<button>` controls with `aria-label`/`aria-expanded`/`aria-controls`, a `role="log"` conversation region (`aria-live="off"`), a visually-hidden `role="status"` announcer updated only at thinking/done/aborted/error nodes, `:focus-visible` rings, and `prefers-reduced-motion` handling.
+
+### Changed
+- **Event pipeline rewritten**: a single capture-phase delegation on `parent.document` (installed once, removed on `beforeunload`) replaces per-render `data-on-click` wiring. Model content carries no action attributes; trusted chrome uses a `data-ai-act` allowlist. `provideModel` now exposes only `togglePanel`.
+- **Markdown sanitizer hardened**: `renderMarkdown` runs through a dedicated `Marked` instance + DOMPurify with `ALLOW_DATA_ATTR:false`; `[[page|alias]]` is a real inline extension (never fires inside code), GFM task lists render as `☑/☐` spans, and results are memoized (LRU ≈200).
+- **Focus & IME safety**: `renderUI` no longer force-focuses the textarea or resets the caret; focus is returned to the input only on a busy→idle transition when nothing else holds it. Composition (`isComposing`/`keyCode 229`) is ignored so IME Enter never sends.
+- **Concurrency & state machine**: a single `withRun` owner sets `isBusy`/`processingPageUuid`; page-context updates are generation-guarded (`contextGen`) so stale route callbacks are discarded; graph switches abort any in-flight run before clearing caches. Requests carry a 120 s non-stream timeout and non-JSON/HTTP-status handling.
+- **Memory layer**: a non-obfuscated `impeller_idx_*` index (with in-memory cache) replaces the full `localStorage` scan on every render; a single corrupt record no longer empties the whole history list; `buildApiPayload` sends only `{role, content}`.
+- **Styles**: all inline styles migrated to `src/ui/styles.ts` behind `--ai-*` tokens; container/shell driven by `.is-collapsed`; bubbles use borders + accent bars instead of shadows; dead `.logseq-page-ref` rules removed.
+- **Neutral busy wording**: the `working` notification no longer references the removed Apply feature.
+- **Wiki-link guidance softened**: the system prompt now carries a single §4 rule ("MAY wrap likely pages in `[[double square brackets]]`") applying to all replies, replacing the previous page-write-only §5.
+
+### Fixed
+- **Compression abort no longer poisons long-term memory**: aborting during auto-compression returns without writing a summary and without issuing the main request (previously the abort marker string was persisted as the summary).
+- **Clipboard fallback**: the double-`removeChild` `NotFoundError` is gone; failures now show the error toast, leave no stray textarea, and restore the previously focused element.
+- **Graph-switch crash**: in-flight runs no longer throw `TypeError` when the chat store is cleared underneath them (path-vs-prefix comparison bug fixed).
+
+### Removed
+- **Smart Apply / Format Page**: the `formatPage` command and its page-write engine (`writeToLogseq`, `parseMarkdownToTree`, `src/engine.ts` → now `src/busyFeedback.ts`) are gone; the sidebar is a pure chat + agentic-tool assistant that never writes AI output back into Logseq blocks.
+- **`Custom Tag` setting**: removed with the write engine. Previously saved `tag` values may remain in settings but are ignored (harmless; no migration needed).
+- **Dead i18n keys**: `applyBtn`, `stopBtn`, `clearBtn`, `settingResetDesc`, `done`, `baseCondition`, `applyReformat`, `applyContext`, `tagDefault`, `settingTagDesc`.
+- **`role === 'tool'` bubble branch**: tool messages are no longer rendered as chat bubbles (superseded by collapsible traces).
+
 # [0.9.7] - 2026-09-04
 
 ### Added

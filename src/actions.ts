@@ -1,32 +1,37 @@
 // src/actions.ts
 import '@logseq/libs';
 import { state } from './config';
-import { writeToLogseq } from './engine';
-import { getTxt } from './utils/markdown';
 import { copyToClipboard } from './utils/clipboard';
-import { buildSystemPrompt, getStaticPromptParts } from './prompts';
+import { getStaticPromptParts } from './prompts';
 import { MemoryManager } from './memory';
-import { agent } from './agent';
 import { renderUI } from './ui';
 import { logger } from './utils/logger';
 
 let isCopying = false;
 
 export const actions = {
-    // 💡 1. 修正原有的 updatePageContext，每次執行都確保圖表路徑最新
+    // 💡 3b：每次進入 ++contextGen；每個 await 後檢查世代號，過期即 return（切頁 race）
     async updatePageContext() {
+        const gen = ++state.contextGen;
+
         const currentGraph = await logseq.App.getCurrentGraph();
+        if (gen !== state.contextGen) return;
         const newGraphPath = currentGraph ? currentGraph.path : 'default';
 
         // 🔒 如果發現圖表路徑跟當前 state 存的不一樣，說明發生了隱式切換，立刻洗掉記憶體
         if (state.currentGraphPath && state.currentGraphPath !== newGraphPath) {
             state.chatStore = {};
+            state.drafts = {};
+            state.tempInput = '';
+            MemoryManager.invalidateMemoryIndex();
         }
         state.currentGraphPath = newGraphPath;
 
         let entity: any = await logseq.Editor.getCurrentPage();
+        if (gen !== state.contextGen) return;
         if (!entity) {
             entity = await logseq.Editor.getCurrentBlock();
+            if (gen !== state.contextGen) return;
         }
         if (!entity) {
             state.currentPageUuid = null;
@@ -36,14 +41,17 @@ export const actions = {
         let actualPage: any = null;
         if (entity.uuid) {
             const checkBlock = await logseq.Editor.getBlock(entity.uuid);
+            if (gen !== state.contextGen) return;
             if (checkBlock && checkBlock.page && checkBlock.page.id) {
                 actualPage = await logseq.Editor.getPage(checkBlock.page.id);
+                if (gen !== state.contextGen) return;
             } else {
                 actualPage = await logseq.Editor.getPage(entity.uuid) || entity;
             }
         }
 
         if (actualPage) {
+            const prevUuid = state.currentPageUuid;
             state.currentPageUuid = actualPage.uuid;
             const pageName = (actualPage.originalName || actualPage.name || "Untitled") as string;
 
@@ -57,97 +65,57 @@ export const actions = {
             } else {
                 state.chatStore[actualPage.uuid].name = pageName;
             }
+
+            // 3b：切頁時載入該頁草稿
+            if (prevUuid !== actualPage.uuid) {
+                state.tempInput = state.drafts[actualPage.uuid] ?? '';
+            }
         } else {
             state.currentPageUuid = null;
         }
     },
 
-    // 💡 2. 新增：專門處理主動切換圖表事件的監聽回呼
+    // 💡 3b：專門處理主動切換圖表事件。比較實體路徑，進行中先 abort 再清快取
     async handleGraphChange() {
-        const newFingerprint = MemoryManager.getGraphPrefix();
-        logger.info("[Actions] Graph switch detected, sandboxing memory...");
-        logger.info("[Actions] Current graph fingerprint:", newFingerprint);
+        const currentGraph = await logseq.App.getCurrentGraph();
+        const newPath = currentGraph ? currentGraph.path : 'default';
 
-        if (state.currentGraphPath !== newFingerprint) {
-            logger.info("[Actions] 偵測到圖表指紋變更，執行徹底重置...");
+        if (state.currentGraphPath === newPath) return;
 
-            // 1. 徹底洗掉舊圖表在記憶體（RAM）中的快取，防止殘留帶到新圖表
-            state.chatStore = {};
-            state.currentPageUuid = null;
+        logger.info("[Actions] 偵測到圖表變更，執行徹底重置...");
 
-            // 2. 重新讀取新圖表路徑
-            const currentGraph = await logseq.App.getCurrentGraph();
-            state.currentGraphPath = currentGraph ? currentGraph.path : 'default';
-
-            // 3. 從硬碟重新載入所有該圖表的對話資料
-            await MemoryManager.getAllSavedPages();
-
-            // 3. 嘗試刷新當前頁面上下文並重新渲染 UI
-            await this.updatePageContext();
-            renderUI();
-        }
-    },
-
-    async formatPage() {
-        if (state.isBusy || !state.currentPageUuid) return;
-
-        const targetUuid = state.currentPageUuid;
-        state.processingPageUuid = targetUuid;
-        const chatHistory = state.chatStore[targetUuid]?.msgs || [];
-
-        const blocks = await logseq.Editor.getPageBlocksTree(targetUuid);
-        const originalContent = getTxt(blocks);
-
-        if (!originalContent.trim()) {
-            logseq.UI.showMsg("頁面目前沒有內容可以排版喔！", 'warning');
+        // 1. 若有進行中的 run，先中止，避免回調寫入即將被清的 chatStore（N6）
+        if (state.run) {
+            state.run.controller.abort();
+            state.run = null;
+            state.isBusy = false;
             state.processingPageUuid = null;
-            return;
         }
 
-        let instruction = chatHistory.length === 0 ? state.t.applyReformat : state.t.applyContext;
+        // 2. 徹底洗掉舊圖表在 RAM 的快取與草稿
+        state.chatStore = {};
+        state.drafts = {};
+        state.tempInput = '';
+        state.currentPageUuid = null;
+        state.currentGraphPath = newPath;
+        MemoryManager.invalidateMemoryIndex();
 
-        const system = buildSystemPrompt({
-            langName: state.t.langName,
-            isWritingToPage: true,
-            baseCondition: state.t.baseCondition,
-            instruction: instruction
-        });
-
-        const pageName = state.chatStore[targetUuid]?.name || "Unknown Page";
-        const recentHistory = MemoryManager.buildApiPayload(targetUuid);
-
-        // 💡 呼叫 llm 大腦發送任務
-        const res = await agent.ask([
-            { role: "system", content: system },
-            ...recentHistory,
-            {
-                role: "user",
-                content: `【Page Name】: ${pageName}\n\n【Original Page Content】:\n${originalContent}\n\n===\nExecute mission based on the context above and output the formatted results now.`
-            }
-        ], true);
-
-        if (res && typeof res === 'string') {
-            logger.info("AI 產生的原始 Markdown：\n", res);
-            await writeToLogseq(res, targetUuid);
-            logseq.UI.showMsg(state.t.done, 'success');
-        }
+        // 3. 重新載入新圖表的上下文並刷新 UI
+        await actions.updatePageContext();
+        renderUI();
     },
 
-    // 新增/修改：複製程式碼的方法 (修復 Iframe 焦點與跨域限制)
-    copyCode: async (e: any) => {
-        const rawCode = e.dataset.code;
-        if (rawCode) {
-            try {
-                const decodedCode = decodeURIComponent(rawCode);
-                await copyToClipboard(decodedCode, '✅ 程式碼已複製至剪貼簿！');
-            } catch (err) {
-                logger.error('Decode failed:', err);
-                logseq.UI.showMsg('❌ 解碼失敗', 'error');
-            }
+    // 複製程式碼：字串由 events 管線從同層 .ai-code-block code 的 textContent 讀取
+    copyCode: async (code: string) => {
+        if (!code) return;
+        try {
+            await copyToClipboard(code, '✅ 程式碼已複製至剪貼簿！');
+        } catch (err) {
+            logger.error('Copy failed:', err);
+            logseq.UI.showMsg('❌ 複製失敗', 'error');
         }
     },
-    openPage: async (e: any) => {
-        const pageName = e?.dataset?.pageName;
+    openPage: async (pageName: string) => {
         if (!pageName) return;
 
         try {
@@ -175,13 +143,13 @@ export const actions = {
             apiKey: "",
             model: "openai/gpt-4o-mini",
             basePath: "https://openrouter.ai/api/v1",
-            tag: state.t.tagDefault,
             temperature: 0.7,
             maxIterations: 7,
             systemPromptOverride: getStaticPromptParts(state.t.langName).join('\n\n'),
             reasoningEffort: "",
             enableSemanticSearch: true,
             enableWebSearch: false,
+            enableStreaming: true,
             webApiKey: "",
         });
         logseq.UI.showMsg(state.t.resetSettingsDone, 'success');

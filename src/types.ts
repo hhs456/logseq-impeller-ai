@@ -12,6 +12,15 @@ export interface ToolCall {
     function: ToolCallFunction;
 }
 
+// 💡 D7：工具執行軌跡（僅 UI，不入 API payload、不進摘要）
+export interface ToolTraceEntry {
+    id: string;
+    name: string;
+    argsSummary: string;
+    status: 'running' | 'done' | 'error';
+    ms?: number;
+}
+
 export interface ChatMessage {
     role: 'user' | 'assistant' | 'system' | 'tool';
     content: string;
@@ -19,6 +28,7 @@ export interface ChatMessage {
     tool_call_id?: string;
     name?: string;
     timestamp?: number;
+    trace?: ToolTraceEntry[];
 }
 
 // 💡 2. 單一頁面对話庫的定義 (改為定義單頁的內容)
@@ -26,6 +36,21 @@ export interface PageChat {
     name: string;
     msgs: ChatMessage[];
     summary?: string;         // 👈 新增：專門給 API 看的滾動摘要，UI 碰不到它
+}
+
+// 💡 一次執行（run）的快照：id 遞增，回調用「是否仍為最新 run」判定過期
+export interface RunState {
+    id: number;
+    pageUuid: string;
+    controller: AbortController;
+}
+
+export type RunStatus = 'ok' | 'aborted' | 'error';
+
+export interface RunResult {
+    status: RunStatus;
+    content: string | null;
+    trace?: ToolTraceEntry[];
 }
 
 // 💡 3. 全域 AppState 的定義

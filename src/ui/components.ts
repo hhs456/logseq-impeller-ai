@@ -1,154 +1,141 @@
 // src/ui/components.ts
 import { escapeHTML, renderMarkdown } from '../utils/markdown';
-import { MemoryManager } from '../memory';
 import { state } from '../config';
+import type { ToolTraceEntry } from '../types';
+
+function buildTraceDetails(trace: ToolTraceEntry[]): string {
+    if (!trace || trace.length === 0) return '';
+    const icon = (s: ToolTraceEntry['status']) => (s === 'done' ? '✅' : s === 'error' ? '⚠️' : '⏳');
+    const rows = trace.map(t => {
+        const ms = t.ms != null ? ` <span class="ai-trace-ms">${t.ms}ms</span>` : '';
+        return `<li>${icon(t.status)} <code>${escapeHTML(t.name)}</code> <span class="ai-trace-args">${escapeHTML(t.argsSummary)}</span>${ms}</li>`;
+    }).join('');
+    return `<details class="ai-trace"><summary>${escapeHTML(state.t.toolTraceSummary)}</summary><ul>${rows}</ul></details>`;
+}
 
 /**
- * 建立側邊欄頂部 Header
+ * 側邊欄頂部 Header（折疊／重設／關閉皆為語義 button）
  */
 export function buildHeader(isCollapsed: boolean, aiBtnText: string): string {
+    const t = state.t;
     return `
-    <div class="header" data-on-click="toggleCollapse" style="padding: 10px 15px; background: var(--ls-secondary-background-color); border-bottom: 1px solid var(--ls-border-color); display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 10px; opacity: 0.5;">${isCollapsed ? '▶' : '▼'}</span>
-            <span style="font-weight: 600; font-size: 0.85em; opacity: 0.8;">🤖 ${aiBtnText.toUpperCase()}</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 4px;">
-            <a data-on-click="resetSettings" title="Reset settings to defaults" style="opacity: 0.4; padding: 4px; cursor: pointer; font-size: 11px;">↺</a>
-            <a data-on-click="hidePanel" style="opacity: 0.5; padding: 4px; cursor: pointer;">✕</a>
+    <div class="ai-header">
+        <button type="button" class="ai-header-toggle" data-ai-act="toggleCollapse"
+            aria-expanded="${!isCollapsed}" aria-controls="ai-sidebar-body-wrapper">
+            <span class="ai-chevron" aria-hidden="true">${isCollapsed ? '▶' : '▼'}</span>
+            <span class="ai-header-title">🤖 ${escapeHTML(aiBtnText)}</span>
+        </button>
+        <div class="ai-header-actions">
+            <button type="button" class="ai-icon-btn" data-ai-act="resetSettings"
+                aria-label="${escapeHTML(t.resetSettingsTip)}" title="${escapeHTML(t.resetSettingsTip)}">↺</button>
+            <button type="button" class="ai-icon-btn" data-ai-act="hidePanel"
+                aria-label="${escapeHTML(t.closePanelTip)}" title="${escapeHTML(t.closePanelTip)}">✕</button>
         </div>
     </div>`;
 }
 
 /**
- * 💡 新增：建立固定在 Header 下方的長期對話記憶庫區塊 (支援水平卷軸與折疊)
+ * 长期对话记忆库横向 chip 列（可折疊）
  */
-export function buildMemorySection(isMemoryCollapsed: boolean): string {
-    const savedPages = MemoryManager.getAllSavedPages();
+export function buildMemorySection(isMemoryCollapsed: boolean, savedPages: { uuid: string; name: string }[]): string {
     if (savedPages.length === 0) return '';
 
-    const titleText = state.t?.langName?.includes("Chinese") ? "🧠 歷史對話記憶庫" : "🧠 Chat Memories";
+    const titleText = state.t.memoriesTitle;
     const arrowIcon = isMemoryCollapsed ? '▶' : '▼';
 
-    // 安全確認：p.name 已通過 escapeHTML() 跳脫，data-page-name 屬性值與顯示文字均安全
     const linksHtml = savedPages.map(p => `
-        <span class="ai-memory-page-link" 
-              data-on-click="openPage" 
-              data-page-name="${escapeHTML(p.name)}" 
-              title="${escapeHTML(p.name)}"
-              style="cursor: pointer; padding: 4px 10px; background: var(--ls-primary-background-color); border: 1px solid var(--ls-border-color); border-radius: 6px; font-size: 11px; white-space: nowrap; flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; color: var(--ls-primary-text-color); opacity: 0.8; transition: all 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+        <button type="button" class="ai-memory-page-link"
+            data-ai-act="openPage" data-ai-page="${escapeHTML(p.name)}" title="${escapeHTML(p.name)}">
             📄 ${escapeHTML(p.name)}
-        </span>
+        </button>
     `).join('');
 
     return `
-    <div class="ai-memory-section" style="background: var(--ls-tertiary-background-color); border-bottom: 1px solid var(--ls-border-color); width: 100%; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0;">
-        
-        <div data-on-click="toggleMemoryCollapse" style="padding: 8px 15px; display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; background: var(--ls-secondary-background-color); border-bottom: ${isMemoryCollapsed ? 'none' : '1px dashed var(--ls-border-color)'};">
-            <span style="font-size: 9px; opacity: 0.4;">${arrowIcon}</span>
-            <span style="font-size: 11px; font-weight: bold; opacity: 0.5; letter-spacing: 0.5px;">${titleText.toUpperCase()}</span>
-            <span style="font-size: 10px; opacity: 0.4; background: var(--ls-primary-background-color); padding: 1px 6px; border-radius: 10px; font-weight: bold;">${savedPages.length}</span>
-        </div>
-        
-        <div class="ai-memory-scrollbar-container" style="display: ${isMemoryCollapsed ? 'none' : 'flex'}; flex-direction: row; flex-wrap: nowrap; gap: 6px; overflow-x: auto; padding: 10px 15px; width: 100%; box-sizing: border-box; align-items: center;">
+    <div class="ai-memory-section${isMemoryCollapsed ? ' is-collapsed' : ''}">
+        <button type="button" class="ai-memory-toggle" data-ai-act="toggleMemoryCollapse"
+            aria-expanded="${!isMemoryCollapsed}" aria-controls="ai-memory-list">
+            <span class="ai-chevron" aria-hidden="true">${arrowIcon}</span>
+            <span class="ai-memory-title">${escapeHTML(titleText)}</span>
+            <span class="ai-memory-count">${savedPages.length}</span>
+        </button>
+        <div id="ai-memory-list" class="ai-memory-scrollbar-container">
             ${linksHtml}
         </div>
-        
-    </div>
-    `;
+    </div>`;
 }
 
 /**
- * 建立聊天對話歷史區塊 (還原為純對話內容，移除清單)
+ * 聊天对话历史区块（role=log、aria-live=off；语音提示由独立 status 区负责）
  */
 export function buildChatHistory(messages: any[], isBusy: boolean, busyMessage: string, welcomeText: string): string {
+    const t = state.t;
     const messageElements = messages.length === 0
-        ? `<div style="font-size: 14px; padding: 20px; opacity: 0.4; text-align: center; line-height: 1.6;">${welcomeText}</div>`
+        ? `<div class="ai-welcome">${escapeHTML(welcomeText)}</div>`
         : messages.map((msg, index) => {
             const roleStr = msg.role as string;
             if (roleStr === 'system') return '';
 
             const isUser = roleStr === 'user';
-            const alignStyle = isUser ? 'align-self: flex-end; background: var(--ls-secondary-background-color);' : 'align-self: flex-start; background: var(--ls-tertiary-background-color);';
             const bubbleClass = isUser ? 'ai-bubble-user' : 'ai-bubble-assistant';
+            const containerClass = isUser ? 'chat-bubble-container is-user' : 'chat-bubble-container is-assistant';
 
-            // 💡 修正：時間顯示格式改為完整的「年月日 時:分」
             const timeStr = msg.timestamp
                 ? new Date(msg.timestamp).toLocaleString([], {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: false
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', hour12: false,
                 })
                 : '';
 
-            let innerContent = '';
-            if (roleStr === 'tool') {
-                innerContent = `<div style="font-size: 11px; font-family: monospace; opacity: 0.6;">🛠️ Tool Call Result:<br/>${escapeHTML(msg.content)}</div>`;
-            } else {
-                // 💡 乾淨俐落！直接交給優化後的 renderMarkdown，不在此處做二次加工
-                innerContent = renderMarkdown(msg.content);
-            }
-            
+            const innerContent = renderMarkdown(msg.content);
+
+            const actionsHtml = isUser
+                ? `<div class="ai-action-row">
+                     <button type="button" class="ai-action-link" data-ai-act="deleteMsg" data-index="${index}">${escapeHTML(t.deleteFromHere)}</button>
+                   </div>`
+                : `<div class="ai-action-row">
+                     <button type="button" class="ai-action-link" data-ai-act="copyMsg" data-index="${index}">${escapeHTML(t.copy)}</button>
+                     <button type="button" class="ai-action-link" data-ai-act="regenerateMsg" data-index="${index}">${escapeHTML(t.retry)}</button>
+                   </div>`;
+
             return `
-            <div class="chat-bubble-container" style="display: flex; flex-direction: column; width: 100%; margin-bottom: 12px;">
-                <div class="${bubbleClass}" style="max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; ${alignStyle} box-shadow: 0 1px 2px rgba(0,0,0,0.05); position: relative;">
+            <div class="${containerClass}">
+                <div class="${bubbleClass}">
                     <div class="ai-bubble-content">${innerContent}</div>
                     ${timeStr ? `<span class="ai-chat-time">${timeStr}</span>` : ''}
                 </div>
-                
-                ${!isUser && roleStr !== 'tool' ? `
-                <div style="display: flex; gap: 10px; margin-left: 6px; margin-top: 4px; opacity: 0.5; font-size: 11px;">
-                    <span class="ai-action-link" data-on-click="copyMsg" data-index="${index}" style="cursor:pointer;">📋 Copy</span>
-                    <span class="ai-action-link" data-on-click="regenerateMsg" data-index="${index}" style="cursor:pointer;">🔄 Retry</span>
-                </div>
-                ` : ''}
-
-                ${isUser ? `
-                <div style="display: flex; justify-content: flex-end; margin-right: 6px; margin-top: 4px; opacity: 0.3; font-size: 11px;">
-                    <span class="ai-action-link" data-on-click="deleteMsg" data-index="${index}" style="cursor:pointer;">🗑️ Delete</span>
-                </div>
-                ` : ''}
-            </div>
-            `;
+                ${actionsHtml}
+                ${!isUser && msg.trace ? buildTraceDetails(msg.trace) : ''}
+            </div>`;
         }).join('');
 
     const busyElement = isBusy
-        ? `<div style="align-self: flex-start; max-width: 85%; background: var(--ls-tertiary-background-color); padding: 10px 14px; border-radius: 12px; font-size: 13px; opacity: 0.6; font-style: italic; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">${busyMessage}</div>`
+        ? `<div class="ai-busy">${escapeHTML(busyMessage)}${buildTraceDetails(state.liveTrace)}</div>`
         : '';
 
     return `
-    <div id="ai-sidebar-history" style="flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; background: var(--ls-primary-background-color); border-bottom: 1px solid var(--ls-border-color); box-sizing: border-box;">
+    <div id="ai-sidebar-history" class="ai-history" role="log" aria-live="off">
         ${messageElements}
         ${busyElement}
     </div>`;
 }
 
 /**
- * 建立底部輸入區塊
+ * 底部输入区块（Send/Stop 切换由 ui.ts 更新 data-ai-act／文字／class）
  */
-export function buildInputArea(placeholderText: string, isBusy: boolean): string {
-    // 👑 核心優化：絕對不要用 disabled！改用 readonly 搭配 opacity，讓它永遠活在焦點樹中
-    const disabledAttr = isBusy ? 'readonly' : '';
-    const visualStyle = isBusy ? 'opacity: 0.5; cursor: not-allowed;' : 'opacity: 1; cursor: text;';
-    
-    const btnText = isBusy ? `🛑 Stop` : `➤ Send`;
-    const btnActionStyle = isBusy
-        ? `data-on-click="stopTask" style="flex: 0.8; background: var(--ls-error-background-color, #ff4d4f); border: 1px solid var(--ls-border-color); border-radius: 6px; color: white; cursor: pointer; font-weight: bold;"`
-        : `data-on-click="sendMsg" style="flex: 0.8; background: var(--ls-quaternary-background-color); border: 1px solid var(--ls-border-color); border-radius: 6px; opacity: 0.9; cursor: pointer; font-weight: bold;"`;
+export function buildInputArea(placeholderText: string, isBusy: boolean, draft: string): string {
+    const t = state.t;
+    const readonlyAttr = isBusy ? 'readonly' : '';
+    const btnText = isBusy ? t.stop : t.send;
+    const btnAct = isBusy ? 'stopTask' : 'sendMsg';
+    const btnClass = isBusy ? 'ai-btn-action ai-send-toggle ai-stop-btn' : 'ai-btn-action ai-send-toggle ai-send-btn';
 
     return `
-    <div style="padding: 12px; background: var(--ls-secondary-background-color); border-top: 1px solid var(--ls-border-color);">
-        <textarea id="ai-sidebar-textarea" rows="2" placeholder="${placeholderText}" 
-            style="width: 100%; background: var(--ls-primary-background-color); color: var(--ls-primary-text-color); border: 1px solid var(--ls-border-color); border-radius: 6px; padding: 10px; font-size: 13px; resize: none; outline: none; margin-bottom: 8px; box-sizing: border-box; ${visualStyle}" 
-            ${disabledAttr}></textarea>
-        
-        <div style="display: flex; gap: 6px;">
-            <button data-on-click="clearChat" class="ai-btn-action" style="flex: 1; padding: 6px 2px; opacity: 0.7; border: 1px solid var(--ls-border-color); border-radius: 6px; cursor: pointer;">🧹 Clear</button>
-            <button data-on-click="exportChat" class="ai-btn-action" style="flex: 1; padding: 6px 2px; opacity: 0.7; border: 1px solid var(--ls-border-color); border-radius: 6px; cursor: pointer;">📤 Export</button>
-            <button ${btnActionStyle}>${btnText}</button>
+    <div class="ai-input-area">
+        <textarea id="ai-sidebar-textarea" class="ai-textarea" rows="2" placeholder="${escapeHTML(placeholderText)}" ${readonlyAttr}>${escapeHTML(draft)}</textarea>
+        <div class="ai-input-row">
+            <button type="button" data-ai-act="clearChat" class="ai-btn-action">${escapeHTML(t.clear)}</button>
+            <button type="button" data-ai-act="exportChat" class="ai-btn-action">${escapeHTML(t.export)}</button>
+            <button id="ai-sidebar-send" type="button" data-ai-act="${btnAct}" class="${btnClass}">${escapeHTML(btnText)}</button>
         </div>
     </div>`;
 }

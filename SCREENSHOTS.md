@@ -1,9 +1,9 @@
 # 📸 Impeller AI Screenshots
 
 ## `0.5.0`
-|<img src="https://raw.githubusercontent.com/hhs456/logseq-impeller-ai/main/img/screenshot_format.jpg" width="400" alt="Format Page Feature">|<img src="https://raw.githubusercontent.com/hhs456/logseq-impeller-ai/main/img/screenshot_copy.jpg" width="400" alt="Advanced Message Controls">|
-|:---:|:---:|
-| *Smart Hierarchical Formatting* | *Quick Chat Actions (Copy/Regenerate)* |
+|<img src="https://raw.githubusercontent.com/hhs456/logseq-impeller-ai/main/img/screenshot_copy.jpg" width="800" alt="Advanced Message Controls">|
+|:---:|
+| *Quick Chat Actions (Copy/Regenerate)* |
 
 ## `0.6.0`
 |<img src="https://raw.githubusercontent.com/hhs456/logseq-impeller-ai/main/img/screenshot_rag.jpg" width="400" alt="Incremental RAG Sync">|<img src="https://raw.githubusercontent.com/hhs456/logseq-impeller-ai/main/img/screenshot_export.jpg" width="400" alt="Export Chat Feature">|

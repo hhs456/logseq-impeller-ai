@@ -2,11 +2,12 @@
 import '@logseq/libs';
 import { state, I18N } from './config';
 import { panel } from './panel';
-import { agent } from './agent';
 import { actions } from './actions';
-import { renderUI } from './ui';
+import { renderUI, scheduleRender } from './ui';
+import { installEventDelegation, uninstallEventDelegation } from './ui/events';
 import { syncVectorDB } from './rag';
 import { getStaticPromptParts } from './prompts';
+import { MemoryManager } from './memory';
 import { encryptApiKey, decryptApiKey, AES_PREFIX } from './utils/crypto';
 import { logger } from './utils/logger';
 
@@ -28,7 +29,9 @@ async function main() {
 
     // --- 基礎設定 ---
     const config = await logseq.App.getUserConfigs();
-    state.t = config.preferredLanguage?.startsWith("zh") ? I18N["zh-TW"] : I18N["en"];
+    const isZh = !!config.preferredLanguage?.startsWith("zh");
+    state.lang = isZh ? "zh-TW" : "en";
+    state.t = isZh ? I18N["zh-TW"] : I18N["en"];
 
     // --- 插件設定面板 ---
     logseq.useSettingsSchema([
@@ -73,13 +76,6 @@ async function main() {
             title: state.t.settingHeadingBehavior,
             description: "",
             default: null,
-        },
-        {
-            key: "tag",
-            type: "string",
-            title: "Custom Tag",
-            description: state.t.settingTagDesc,
-            default: state.t.tagDefault
         },
         {
             key: "temperature",
@@ -130,6 +126,13 @@ async function main() {
             title: "Enable Web Search",
             description: state.t.settingEnableWebSearchDesc,
             default: false
+        },
+        {
+            key: "enableStreaming",
+            type: "boolean",
+            title: "Enable Streaming (SSE)",
+            description: state.t.settingEnableStreamingDesc,
+            default: true
         },
         {
             key: "webApiKey",
@@ -223,11 +226,15 @@ async function main() {
         }
     });
 
-    // --- 注入 UI 互動模型 ---
+    // --- 注入 UI 互動模型（僅 toolbar 按鈕需要 Logseq 路由；其餘走自有委派管線） ---
     logseq.provideModel({
-        ...actions,
-        ...agent,
-        ...panel
+        togglePanel: panel.togglePanel,
+    });
+
+    // --- 事件委派：掛在 parent.document（capture），與 DOM 掛載時機無關 ---
+    installEventDelegation();
+    logseq.beforeunload(async () => {
+        uninstallEventDelegation();
     });
 
     // --- 工具列按鈕 ---
@@ -252,11 +259,21 @@ async function main() {
         await actions.resetSettings();
     });
 
+    // D8：孤兒對話清理（手動、可 confirm；不做自動刪除）
+    logseq.App.registerCommandPalette({
+        key: 'purge-other-graph-chats',
+        label: state.t.purgeLabel,
+    }, async () => {
+        if (!confirm(state.t.purgeConfirm)) return;
+        const removed = MemoryManager.purgeOtherGraphChats();
+        logseq.UI.showMsg(state.t.purgeDone.replace('{count}', String(removed)), 'success');
+    });
+
     // --- 路由切換監聽 ---
     logseq.App.onRouteChanged(async () => {
         if (state.isVisible) {
             await actions.updatePageContext();
-            renderUI();
+            scheduleRender();
         }
     });
 

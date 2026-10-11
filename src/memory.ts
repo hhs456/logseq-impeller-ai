@@ -3,37 +3,97 @@ import { state } from './config';
 import { obfuscate, deobfuscate } from './utils/obfuscate';
 import { logger } from './utils/logger';
 
-const STORAGE_PREFIX = "impeller_chat_"; 
+const CHAT_PREFIX = "impeller_chat_";
+const IDX_PREFIX = "impeller_idx_";   // N8：index key 不得以 impeller_chat_ 開頭
+
+interface IndexEntry { name: string; count: number; }
+type ChatIndex = Record<string, IndexEntry>;
 
 export const MemoryManager = {
-    // 💡 核心修正 1：動態產生當前活躍圖表（Graph）專屬的儲存前綴，達成多圖表記憶完全隔離
+    // 記憶體快取：避免每次 render 全掃描 localStorage
+    _cache: {
+        graphId: null as string | null,
+        pages: [] as { uuid: string; name: string }[],
+        dirty: true,
+        version: 0,
+    },
+
+    // 💡 動態產生當前活躍圖表（Graph）專屬的編碼 ID
+    getEncodedGraphId(): string {
+        const graphPath = (state.currentGraphPath && typeof state.currentGraphPath === 'string')
+            ? state.currentGraphPath
+            : 'default';
+        return encodeURIComponent(graphPath).replace(/%/g, '_');
+    },
+
     getGraphPrefix(): string {
         try {
-            // 確保 graphPath 存在
-            const graphPath = (state.currentGraphPath && typeof state.currentGraphPath === 'string') 
-                ? state.currentGraphPath 
-                : 'default';
-
-            // 核心修改：使用 encodeURIComponent 處理路徑
-            // 這樣「我的筆記」會變成 "%E6%88%91%E7%9A%84%E7%AD%86%E8%A8%98"
-            // 這在 URL 和 LocalStorage Key 中都是絕對合法且唯一的
-            const encodedGraphId = encodeURIComponent(graphPath).replace(/%/g, '_');
-            
-            // 為了避免過長，我們保留前 30 個字元加上 hash 或直接使用編碼後名稱
-            // 這裡直接使用編碼後的字串作為唯一識別
-            return `${STORAGE_PREFIX}${encodedGraphId}_`;
+            return `${CHAT_PREFIX}${this.getEncodedGraphId()}_`;
         } catch (err) {
             logger.error("[Memory] 生成圖表字首失敗，使用 fallback", err);
-            return `${STORAGE_PREFIX}fallback_`;
+            return `${CHAT_PREFIX}fallback_`;
         }
+    },
+
+    getIndexKey(): string {
+        try {
+            return `${IDX_PREFIX}${this.getEncodedGraphId()}`;
+        } catch {
+            return `${IDX_PREFIX}fallback`;
+        }
+    },
+
+    getIndexVersion(): number {
+        return this._cache.version;
+    },
+
+    invalidateMemoryIndex() {
+        this._cache.graphId = null;
+        this._cache.pages = [];
+        this._cache.dirty = true;
+    },
+
+    _readIndex(): ChatIndex | null {
+        try {
+            const raw = localStorage.getItem(this.getIndexKey());
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return (parsed && typeof parsed === 'object') ? parsed as ChatIndex : null;
+        } catch {
+            return null;
+        }
+    },
+
+    _writeIndex(idx: ChatIndex) {
+        try {
+            localStorage.setItem(this.getIndexKey(), JSON.stringify(idx));
+            this._cache.dirty = true;
+            this._cache.version++;
+        } catch (err) {
+            logger.error("[Memory] 寫入索引失敗", err);
+        }
+    },
+
+    _indexSet(uuid: string, name: string, count: number) {
+        const idx = this._readIndex() ?? {};
+        idx[uuid] = { name, count };
+        this._writeIndex(idx);
+    },
+
+    _indexRemove(uuid: string) {
+        const idx = this._readIndex();
+        if (!idx) return;
+        delete idx[uuid];
+        this._writeIndex(idx);
     },
 
     saveHistory(targetUuid: string) {
         if (!targetUuid || !state.chatStore[targetUuid]) return;
         try {
-            // 💡 核心修正 2：儲存金鑰綁定圖表路徑字首
             const key = this.getGraphPrefix() + targetUuid;
-            localStorage.setItem(key, obfuscate(JSON.stringify(state.chatStore[targetUuid])));
+            const chat = state.chatStore[targetUuid];
+            localStorage.setItem(key, obfuscate(JSON.stringify(chat)));
+            this._indexSet(targetUuid, chat.name, chat.msgs.length);
         } catch (err) {
             logger.error("[Memory] 寫入持久化記憶失敗", err);
         }
@@ -41,7 +101,6 @@ export const MemoryManager = {
 
     loadHistory(targetUuid: string) {
         try {
-            // 💡 核心修正 3：讀取金鑰綁定圖表路徑字首
             const key = this.getGraphPrefix() + targetUuid;
             const data = localStorage.getItem(key);
             return data ? JSON.parse(deobfuscate(data)) : null;
@@ -55,35 +114,57 @@ export const MemoryManager = {
         try {
             const key = this.getGraphPrefix() + targetUuid;
             localStorage.removeItem(key);
+            this._indexRemove(targetUuid);
         } catch (err) {
             logger.error("[Memory] 清除歷史記憶失敗", err);
         }
     },
 
-    // 💡 核心修正 4：遍歷硬碟時，【精準過濾】只撈出開頭符合「當前圖表字首」的對話清單！
-    getAllSavedPages() {
-        const pages: { uuid: string, name: string }[] = [];
-        try {
-            const currentPrefix = this.getGraphPrefix();
-            
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                
-                // 🔒 關鍵防線：只有當 key 是以目前這個圖表的路徑字首開頭時，才撈出來
-                if (key && key.startsWith(currentPrefix)) {
-                    const uuid = key.slice(currentPrefix.length);
-                    const raw = localStorage.getItem(key);
-                    if (raw) {
-                        const parsed = JSON.parse(deobfuscate(raw));
-                        if (parsed && parsed.name && parsed.msgs && parsed.msgs.length > 0) {
-                            pages.push({ uuid, name: parsed.name });
-                        }
-                    }
+    // 冷啟動：一次性全掃描，逐筆 try/catch（N8：單筆壞資料只跳過該筆）
+    _legacyScan(): ChatIndex {
+        const idx: ChatIndex = {};
+        const currentPrefix = this.getGraphPrefix();
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key || !key.startsWith(currentPrefix)) continue;
+            const uuid = key.slice(currentPrefix.length);
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) continue;
+                const parsed = JSON.parse(deobfuscate(raw));
+                if (parsed && parsed.name && Array.isArray(parsed.msgs) && parsed.msgs.length > 0) {
+                    idx[uuid] = { name: parsed.name, count: parsed.msgs.length };
                 }
+            } catch {
+                /* 跳過這一筆，不影響其他 */
             }
-        } catch (err) {
-            logger.error("[Memory] 獲取歷史記憶清單失敗:", err);
         }
+        this._writeIndex(idx);
+        return idx;
+    },
+
+    getAllSavedPages(): { uuid: string; name: string }[] {
+        const graphId = this.getEncodedGraphId();
+        if (this._cache.graphId === graphId && !this._cache.dirty) {
+            return this._cache.pages;
+        }
+
+        let idx = this._readIndex();
+        if (!idx) {
+            idx = this._legacyScan();
+        }
+
+        const pages: { uuid: string; name: string }[] = [];
+        for (const uuid of Object.keys(idx)) {
+            const entry = idx[uuid];
+            if (entry && entry.name && entry.count > 0) {
+                pages.push({ uuid, name: entry.name });
+            }
+        }
+
+        this._cache.graphId = graphId;
+        this._cache.pages = pages;
+        this._cache.dirty = false;
         return pages;
     },
 
@@ -92,33 +173,57 @@ export const MemoryManager = {
         const fullHistory = chatData?.msgs || [];
         const recentHistory = fullHistory.length > maxHistory ? fullHistory.slice(-maxHistory) : fullHistory;
 
+        // N7：只輸出 {role, content}，不暴漏 timestamp / trace
+        const stripped = recentHistory.map(m => ({ role: m.role, content: m.content }));
+
         if (chatData?.summary) {
             return [
                 { role: "system", content: `【長期記憶摘要】：\n${chatData.summary}` },
-                ...recentHistory
+                ...stripped
             ];
         }
-        return recentHistory;
+        return stripped;
     },
 
-    async compressIfNeeded(targetUuid: string, aiCaller: Function) {
+    // D8：只刪非當前 prefix 且符合 impeller_chat_ 的 key，回傳刪除數量（不自動觸發，僅供命令面板）
+    purgeOtherGraphChats(): number {
+        const currentPrefix = this.getGraphPrefix();
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith(CHAT_PREFIX) && !key.startsWith(currentPrefix)) {
+                keysToRemove.push(key);
+            }
+        }
+        for (const key of keysToRemove) localStorage.removeItem(key);
+        if (keysToRemove.length > 0) this.invalidateMemoryIndex();
+        return keysToRemove.length;
+    },
+
+    async compressIfNeeded(
+        targetUuid: string,
+        aiCaller: (msgs: any[]) => Promise<{ status: 'ok' | 'aborted' | 'error'; content: string | null }>
+    ): Promise<'ok' | 'aborted' | 'skipped'> {
         const chatData = state.chatStore[targetUuid];
-        const THRESHOLD = 14; 
+        const THRESHOLD = 14;
 
-        if (!chatData || chatData.msgs.length <= THRESHOLD) return;
+        if (!chatData || chatData.msgs.length <= THRESHOLD) return 'skipped';
 
-        const oldMessages = chatData.msgs.slice(0, -6);
+        const oldMessages = chatData.msgs.slice(0, -6).map(m => ({ role: m.role, content: m.content }));
         const existingSummary = chatData.summary ? `過去摘要：\n${chatData.summary}\n\n` : '';
         const compressPrompt = `你是一個記憶整理專家。請將以下對話內容濃縮成精華摘要。保留重要決策、事實與使用者偏好，排除閒聊。請直接輸出摘要內容。`;
 
-        const newSummary = await aiCaller([
+        const res = await aiCaller([
             { role: "system", content: compressPrompt },
             { role: "user", content: `${existingSummary}需要加入更新的舊對話：\n${JSON.stringify(oldMessages)}` }
-        ], false);
+        ]);
 
-        if (newSummary) {
-            state.chatStore[targetUuid].summary = newSummary;
-            this.saveHistory(targetUuid);
-        }
+        // N2：只有成功才寫摘要；中止／錯誤一律不污染長期記憶
+        if (res.status === 'aborted') return 'aborted';
+        if (res.status !== 'ok' || !res.content) return 'skipped';
+
+        state.chatStore[targetUuid].summary = res.content;
+        this.saveHistory(targetUuid);
+        return 'ok';
     }
 };
