@@ -6,6 +6,8 @@ import { actions } from './actions';
 import { renderUI, scheduleRender } from './ui';
 import { installEventDelegation, uninstallEventDelegation } from './ui/events';
 import { syncVectorDB, onGraphSwitched, getRagDiagSummary, getRagDiagReport } from './rag';
+import { getGraphCacheKey } from './graph/kind';
+import { diag } from './graph/diag';
 import { getStaticPromptParts } from './prompts';
 import { MemoryManager } from './memory';
 import { encryptApiKey, decryptApiKey, AES_PREFIX } from './utils/crypto';
@@ -288,7 +290,19 @@ async function main() {
     });
 
     // --- 圖譜切換監聽 ---
+    // 2.0.2 實測（診斷時間軸）：啟動約 380ms 宿主會補發一次「同圖」事件。
+    // 同鍵即跳過（真實切圖鍵必變），否則白白作廢＋重啟一輪同步（N21／review S3）。
+    let lastGraphKey: string | null = null;
+    try { lastGraphKey = await getGraphCacheKey(); } catch { /* 取不到則放行首個事件，寧多勿漏 */ }
     logseq.App.onCurrentGraphChanged(async () => {
+        let key: string | null = null;
+        try { key = await getGraphCacheKey(); } catch { key = null; }
+        if (key !== null && key === lastGraphKey) {
+            diag('graph-switch-skip', key);
+            return;
+        }
+        lastGraphKey = key;
+
         // Step 1｜同步重置：作廢在飛世代、清索引與 adapter 快取
         //        （關閉「事件到 UI 隔離完成」之間舊索引仍可被查詢的窗口，§4.5①）
         onGraphSwitched();

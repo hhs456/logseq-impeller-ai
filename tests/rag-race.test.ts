@@ -342,4 +342,41 @@ describe('診斷外露（N9 blockCount／N17 丟棄點／N21 切圖計數）', (
         expect(Array.isArray(snap.history)).toBe(true);
         expect(snap.summary).toBe(rag.getRagDiagSummary());
     });
+
+    it('2.0.2 啟動競態：db-worker 未就緒 → 退避重試後成功，無 failed、無錯誤 toast', async () => {
+        const rows = [fileBlockRow('diag-e-1', 'worker retry', 'Page E')];
+        let calls = 0;
+        mock.DB.datascriptQuery = vi.fn(async (query: string) => {
+            if (query.includes('(count')) return 0;
+            calls++;
+            if (calls === 1) {
+                throw { message: 'db-worker has not been initialized', name: 'Error' };
+            }
+            return rows.map((r) => [r]);
+        });
+
+        const rag = await loadRag();
+        await rag.syncVectorDB();
+
+        const st = rag.getIndexState() as any;
+        expect(st.status).toBe('ready');
+        expect(st.blockCount).toBe(1);
+        const report = rag.getRagDiagReport();
+        expect(report).toContain('worker-retry');
+        expect(report).not.toContain('failed');
+        const errorToasts = mock.UI.showMsg.mock.calls.filter((c: any[]) => c[1] === 'error');
+        expect(errorToasts).toHaveLength(0);
+    });
+
+    it('非 worker 錯誤不重試：照舊逃出 → failed ＋ error toast', async () => {
+        mock.DB.datascriptQuery = vi.fn(async () => { throw new Error('some-real-query-error'); });
+
+        const rag = await loadRag();
+        await rag.syncVectorDB();
+
+        expect(rag.getIndexState()).toEqual({ status: 'failed', message: 'some-real-query-error' });
+        expect(rag.getRagDiagReport()).not.toContain('worker-retry');
+        const errorToasts = mock.UI.showMsg.mock.calls.filter((c: any[]) => c[1] === 'error');
+        expect(errorToasts).toHaveLength(1);
+    });
 });

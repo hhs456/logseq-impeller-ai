@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DB-graph navigation: `openPage` pushes `{ name: uuid }` (host prefers uuid); file graphs keep the original-case name.
 
 ### Fixed
+- **DB-graph startup race (found on 2.0.2 beta, 2026-10-11)**: Logseq's db worker initializes after plugin load, so early `checkCurrentIsDbGraph()` calls can return `false` on a DB graph ("not a DB graph" ≠ "not yet known") and early queries reject with `db-worker has not been initialized`. Three-layer fix: (a) probe verifies a `false` verdict against schema traits (`:block/title` rows present, `:block/content` absent → DB), (b) sync retries with backoff on worker-not-ready, invalidating the probe cache each attempt — no more spurious ❌ toast at startup, (c) the `onCurrentGraphChanged` handler now skips same-graph events (the host re-fires one ~380 ms after boot; previously it killed the in-flight first sync).
 - **Cross-graph index race (N17)**: the `isSyncing` drop-lock is replaced by a generation token + serialized chain. Switching graphs while a sync is in flight no longer (a) silently abandons the new graph's index, nor (b) lets the old graph's late completion write into the current index (`semantic_search` on B could previously return A's content). Late arrivals — successes *and* errors — are discarded at every await boundary, including mid-embedding-loop, and a discarded round never fires the failure toast. `IndexState.building` now carries its `gen` (fills the Phase 0 scaffold).
 # [0.10.1] - 2026-10-11
 

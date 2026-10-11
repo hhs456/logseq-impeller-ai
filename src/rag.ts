@@ -135,6 +135,31 @@ function describeErr(err: unknown): string {
     return String(err);
 }
 
+// 2.0.2 實測：插件載入早於宿主 db worker 就緒，早期查詢回
+// "db-worker has not been initialized"。這是暫時狀態，不是失敗——
+// 退避重試並在每次重試前作廢探測快取（假 file 判定不得留存）。
+const WORKER_NOT_READY = 'db-worker has not been initialized';
+
+async function withWorkerRetry<T>(
+    fn: () => Promise<T>,
+    isStale: () => boolean,
+    tries = 6,
+    delayMs = 500,
+): Promise<T | null> {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return await fn();
+        } catch (err) {
+            if (!describeErr(err).includes(WORKER_NOT_READY)) throw err;
+            if (attempt >= tries) throw err;
+            diag('worker-retry', `attempt=${attempt}`);
+            resetAdapter();
+            await new Promise((r) => setTimeout(r, delayMs));
+            if (isStale()) return null;
+        }
+    }
+}
+
 async function runSync(gen: number) {
     // 過期輪的每個 await 邊界都帶標籤記錄：N17 要能分辨「死在寫 vectorDb 之前（正確）」
     // 與「死在之後（bug）」。一回合一最多產生一筆 drop（命中即 return），無需去重。
@@ -150,7 +175,8 @@ async function runSync(gen: number) {
     diag('sync-start', `gen=${gen}`);
 
     try {
-        const fetched = await fetchLogseqBlocks();
+        const fetched = await withWorkerRetry(fetchLogseqBlocks, () => stale('workerRetry'));
+        if (fetched === null) return;
         if (stale('fetch')) return;
 
         if (fetched.status === 'unsupported') {
