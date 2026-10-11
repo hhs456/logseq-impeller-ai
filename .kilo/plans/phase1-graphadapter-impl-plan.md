@@ -159,3 +159,25 @@ nightly 保留單一用途：beta 測出問題時，確認是否已在上游修�
 3. **啟動時序**：同步開始時 kind 快取仍是 `file`（指紋尚未跑）；啟動首輪同步完成指紋改判後，所有工具守衛才正確。窄窗口內 `graph_tag_search`/`global_keyword_search` 會走 file 查詢（DB 圖上回零結果字串而非 `GRAPH_TYPE_UNSUPPORTED`），`pageDisplayName` 走 file 語意（DB 實體無 `originalName` → 退回 lowercase `name`）。**N7 必須在啟動同步完成後再測**；此窗口是否值得收窄（例如 tools 守衛也走一次指紋）留給判讀會決定。
 4. **已驗證通過**：N1（指紋路徑）、N21（`graph-switch-skip` 生效、啟動補發事件 ~371ms 實測確認、`switches=0`）、worker-retry（階段①無 ❌）、canary＋指紋的組合（`schema-mismatch` 不再是終態誤報）。
 5. **db-worker 三階段模型修正**：階段①（查詢丟錯 `db-worker has not been initialized`）實測確認；階段②（全零不丟錯）**未被實測證明存在**——第三輪的 `probe-ambiguous` 缺席其實只證明指紋沒跑到（閘未開），與階段②無關。全零 → null 不寫快取的設計仍保留（防御性，零成本）。
+
+### A.2 第一趟（旗標關）實測結果（2026-10-11，2.0.2 beta，圖＝生活日誌 2780 區塊）
+
+| # | 結果 | 備註 |
+|---|---|---|
+| N1 | ✅ | 指紋路徑：`title=2780 content=0` → 改判 db → `db-adapter-disabled` |
+| N2 | ✅ | 工具列＋首次點擊正常 |
+| **N3** | ❌ | **S8**：未關面板先關側欄 → 需點兩次。`isVisible` 與被 React 卸載的 DOM 失去同步 |
+| **N4** | ❌ | **S8**：快捷鍵關側欄再開 → 面板不在。React 重建 `.sidebar-item-list`，provideUI 模板未重注入 |
+| N5 | ✅ | 面板不被清、不重複 |
+| N6 | ✅ | 寬度／折疊／主題正常 |
+| N7 | ✅ | chat header 大小寫保留（指紋改判後 kind=db → `pageDisplayName` 取 title） |
+| N8 | ✅ | 行為面：agent 知所屬頁（`buildPageContextPrompt` 取到正確 page uuid） |
+| N15 | ✅ | 導航正常、不創空白頁 |
+| **N16** | ⚠️ | 本版本內重啟歷史在＝過；「舊版歷史不在」＝**跨版本 graph.path 漂移**（`memory.ts` key=f(currentGraphPath)，Phase 1 未動此路徑）→ 舊資料孤兒化於舊 key，**未刪除、可恢復**。屬禁碰範圍 |
+| N17 | 併入第二趟 | 旗標關時 B 圖 semantic_search 本就回 UNSUPPORTED，測不到污染；污染檢查需旗標開（第二趟）。旗標關的「世代作廢」機制已由 `rag-race.test.ts` 6 情境單元覆蓋 |
+
+**結論**：DB adapter 行為面（N1／N21／worker-retry／canary＋指紋）全綠。N3／N4 為計畫預告的 S8 側欄問題、N16 為宿主 graph.path 穩定性——兩者皆**非 Phase 1 回歸、皆在禁碰檔案（UI／memory.ts）**，轉獨立任務，不阻斷第二趟。
+
+**待辦（範圍外，另開任務）**：
+1. 側欄改用官方 sidebar renderer（`logseq.API` 的 `:plugin` block-type / `get-hosted-renderers`），取代 `provideUI` 硬塞——解 N3／N4。
+2. `graph.path` 跨版本穩定性調查＋可能的聊天遷移——解 N16「舊版不在」。
