@@ -6,7 +6,7 @@
 import '@logseq/libs';
 import { escapeDsString } from '../utils/query';
 import { blockText, slug, toBlockNode, toBlockNodes } from './text';
-import { CANARY_MIN, countPageBlocksCanary } from './canary';
+import { resolveFetchOutcome } from './canary';
 import type {
     BlockNode, FetchBlocksResult, GraphAdapter, GraphKind, IndexableBlock, KeywordHit, RefHit,
 } from './types';
@@ -32,13 +32,7 @@ export class DbGraphAdapter implements GraphAdapter {
             pageName: row.page?.title ?? "未命名頁面",
         }));
 
-        if (blocks.length > 0) return { status: 'ok', kind: this.kind, blocks };
-
-        const canary = await countPageBlocksCanary();
-        if (canary > CANARY_MIN) {
-            return { status: 'unsupported', kind: this.kind, reason: 'schema-mismatch', detail: `canary=${canary}` };
-        }
-        return { status: 'empty', kind: this.kind };
+        return resolveFetchOutcome(this.kind, blocks);
     }
 
     // 保留小寫 :block/name 做鍵；同名多頁全部納入（:block/name 在 DB 不再唯一）。

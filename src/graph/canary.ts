@@ -1,5 +1,6 @@
 // src/graph/canary.ts
 import '@logseq/libs';
+import type { FetchBlocksResult, GraphKind, IndexableBlock } from './types';
 
 // 零結果時的 canary 閾值（可調）
 export const CANARY_MIN = 20;
@@ -17,4 +18,19 @@ export async function countPageBlocksCanary(): Promise<number> {
         return typeof n === 'number' ? n : 0;
     }
     return 0;
+}
+
+// fetchAllBlocks 結尾的三態收攏點：ok / schema-mismatch / empty。
+// 兩種 adapter 共引同一實作，比較子與 detail 格式只有一份（review finding 5）。
+export async function resolveFetchOutcome(
+    kind: GraphKind,
+    blocks: IndexableBlock[],
+): Promise<FetchBlocksResult> {
+    if (blocks.length > 0) return { status: 'ok', kind, blocks };
+
+    const canary = await countPageBlocksCanary();
+    if (canary > CANARY_MIN) {
+        return { status: 'unsupported', kind, reason: 'schema-mismatch', detail: `canary=${canary}` };
+    }
+    return { status: 'empty', kind };
 }

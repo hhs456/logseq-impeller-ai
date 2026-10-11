@@ -4,7 +4,7 @@
 import '@logseq/libs';
 import { escapeDsString } from '../utils/query';
 import { slug, toBlockNode, toBlockNodes } from './text';
-import { CANARY_MIN, countPageBlocksCanary } from './canary';
+import { resolveFetchOutcome } from './canary';
 import type {
     BlockNode, FetchBlocksResult, GraphAdapter, GraphKind, IndexableBlock, KeywordHit, RefHit,
 } from './types';
@@ -29,13 +29,7 @@ export class FileGraphAdapter implements GraphAdapter {
             };
         });
 
-        if (blocks.length > 0) return { status: 'ok', kind: this.kind, blocks };
-
-        const canary = await countPageBlocksCanary();
-        if (canary > CANARY_MIN) {
-            return { status: 'unsupported', kind: this.kind, reason: 'schema-mismatch', detail: `canary=${canary}` };
-        }
-        return { status: 'empty', kind: this.kind };
+        return resolveFetchOutcome(this.kind, blocks);
     }
 
     async blocksReferencingPage(page: string): Promise<RefHit[]> {

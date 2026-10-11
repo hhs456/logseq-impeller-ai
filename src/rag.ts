@@ -96,7 +96,7 @@ export async function fetchLogseqBlocks(): Promise<FetchBlocksResult> {
             status: 'unsupported',
             kind,
             reason: 'db-adapter-disabled',
-            detail: 'DB_ADAPTER_ENABLED=false (Phase 1, flag off)',
+            detail: 'DB_ADAPTER_ENABLED=false (Phase 0)',
         };
     }
     const adapter = await getAdapter();
@@ -117,6 +117,8 @@ async function ensureExtractor() {
 }
 
 async function runSync(gen: number) {
+    // 出隊先驗世代：過期輪不寫 building、不付全圖拉取（review finding 1）
+    if (gen !== syncGen) return;
     indexState = { status: 'building', gen };
     const stale = () => gen !== syncGen;
 
