@@ -183,4 +183,18 @@ describe('syncVectorDB 狀態機', () => {
             hits: [{ id: 'uuid-warm-1', content: `(來自頁面 [[Warm Page]]) ${content}` }],
         });
     });
+
+    it('(7) 探測 rejection 是純物件（2.0.2 實測形狀）→ 錯誤訊息帶來源與負載，非 [object Object]', async () => {
+        mock.App.getInfo = vi.fn(async () => ({ version: '2.0.2', supportDb: true }));
+        mock.App.checkCurrentIsDbGraph = vi.fn(async () => { throw { error: 'not-ready', code: 42 }; });
+        const rag = await loadRag();
+
+        await rag.syncVectorDB();
+        const st = rag.getIndexState() as any;
+        expect(st.status).toBe('failed');
+        expect(st.message).toBe('checkCurrentIsDbGraph rejected: {"error":"not-ready","code":42}');
+        expect(rag.getRagDiagReport()).toContain('failed');
+        expect(rag.getRagDiagReport()).toContain('not-ready');
+        expect(rag.getRagDiagReport()).not.toContain('[object Object]');
+    });
 });

@@ -2,6 +2,14 @@
 import '@logseq/libs';
 import type { GraphKind } from './types';
 
+// 探測失敗維持「不吞、讓它逃出」的設計；只在再拋時標上來源呼叫，
+// 因為 2.0.2 實測宿主 rejection 是無訊息的純物件（夜版 N1 除錯用）。
+function tagged(label: string, err: unknown): Error {
+    const detail = err instanceof Error ? err.message
+        : (() => { try { return JSON.stringify(err); } catch { return String(err); } })();
+    return new Error(`${label} rejected: ${detail}`);
+}
+
 interface KindCache {
     graphKey: string;
     kind: GraphKind;
@@ -10,7 +18,7 @@ interface KindCache {
 let cache: KindCache | null = null;
 
 export async function getGraphCacheKey(): Promise<string> {
-    const graph = await logseq.App.getCurrentGraph();
+    const graph = await logseq.App.getCurrentGraph().catch((e: unknown) => { throw tagged('getCurrentGraph', e); });
     if (!graph) return 'unknown';
     return String((graph as any).url ?? (graph as any).path ?? 'unknown');
 }
@@ -22,9 +30,10 @@ export async function getGraphCacheKey(): Promise<string> {
  * 永不觸及 checkCurrentIsDbGraph（R1 已實證）。
  */
 export async function probeGraphKind(): Promise<GraphKind> {
-    const info = await logseq.App.getInfo();
+    const info = await logseq.App.getInfo().catch((e: unknown) => { throw tagged('getInfo', e); });
     if (info?.supportDb !== true) return 'file';
-    return (await logseq.App.checkCurrentIsDbGraph()) ? 'db' : 'file';
+    const isDb = await logseq.App.checkCurrentIsDbGraph().catch((e: unknown) => { throw tagged('checkCurrentIsDbGraph', e); });
+    return isDb ? 'db' : 'file';
 }
 
 export async function getGraphKind(): Promise<GraphKind> {

@@ -124,6 +124,17 @@ async function ensureExtractor() {
     return extractor;
 }
 
+// 宿主 api:call 的 rejection 不一定是 Error 實例（2.0.2 實測為純物件）——
+// String(err) 只會產出 [object Object]，把負載丟光。故以 JSON 序列化兜底，
+// 讓 diag('failed') 與 indexState.failed.message 帶得上可判讀的真實錯誤。
+function describeErr(err: unknown): string {
+    if (err instanceof Error) return err.message;
+    if (typeof err === 'object' && err !== null) {
+        try { return JSON.stringify(err); } catch { return Object.prototype.toString.call(err); }
+    }
+    return String(err);
+}
+
 async function runSync(gen: number) {
     // 過期輪的每個 await 邊界都帶標籤記錄：N17 要能分辨「死在寫 vectorDb 之前（正確）」
     // 與「死在之後（bug）」。一回合一最多產生一筆 drop（命中即 return），無需去重。
@@ -244,7 +255,7 @@ async function runSync(gen: number) {
     } catch (err) {
         if (stale('catch')) return; // 過期輪的例外不污染新輪狀態、不彈錯
         vectorDb = null; // 不殘留舊圖索引
-        const message = err instanceof Error ? err.message : String(err);
+        const message = describeErr(err);
         indexState = { status: 'failed', message };
         diag('failed', `gen=${gen} ${message}`);
         logger.error("向量資料庫同步失敗:", err);
