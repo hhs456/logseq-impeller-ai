@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { installLogseqMock, LogseqMock } from './helpers/logseq-mock';
 import { createSchemaAwareFake, dbBlockRow } from './helpers/graph-fake';
 import { DbGraphAdapter } from '../src/graph/db';
+import { diagHistory, clearDiag } from '../src/graph/diag';
 
 let mock: LogseqMock;
 let adapter: DbGraphAdapter;
@@ -144,5 +145,67 @@ describe('DbGraphAdapter Editor API 讀取路徑（結構待 N12/N13）', () => 
         mock.Editor.getBlock = vi.fn(async () => null);
         expect(await adapter.blockTree('page-uuid')).toBeNull();
         expect(mock.Editor.getBlock).toHaveBeenCalledWith('page-uuid', { includeChildren: true });
+    });
+});
+
+// N14 修復：Editor API 的 fullTitle 保留 raw [[uuid]]（2.0.2 實測），
+// 以已實證屬性的 ref map 取代為可讀名。
+describe('DbGraphAdapter 連結取代（N14）', () => {
+    const PAGE_TREE = [
+        {
+            uuid: 'b-1', fullTitle: '引用 [[6acb9138-e682-45a5-a6bd-b646c2d34a52]] 與 #[[aaaabbbb-cccc-dddd-eeee-ffffffffffff]] 的區塊',
+            content: 'raw', children: [
+                { uuid: 'b-1-1', fullTitle: '見 ((11112222-3333-4444-5555-666677778888))', content: 'raw kid', children: [] },
+            ],
+        },
+    ];
+    const REF_ROWS = [
+        ['6ACB9138-E682-45A5-A6BD-B646C2D34A52', 'ZZTest Apple'],
+        ['aaaabbbb-cccc-dddd-eeee-ffffffffffff', 'ZZCompany'],
+        ['11112222-3333-4444-5555-666677778888', '被引用的區塊文字'],
+    ];
+
+    it('pageTree：[[uuid]]／((uuid)) 取代為可讀名，巢狀一併處理', async () => {
+        mock.Editor.getPageBlocksTree = vi.fn(async () => PAGE_TREE);
+        mock.DB.datascriptQuery = vi.fn(async () => REF_ROWS.map(r => r));
+        const nodes = await adapter.pageTree('ZZTest Apple');
+        expect(nodes![0].text).toBe('引用 [[ZZTest Apple]] 與 #[[ZZCompany]] 的區塊');
+        expect(nodes![0].children[0].text).toBe('見 ((被引用的區塊文字))');
+    });
+
+    it('ref map 查詢只用已實證屬性（不自創屬性名）', async () => {
+        mock.Editor.getPageBlocksTree = vi.fn(async () => PAGE_TREE);
+        mock.DB.datascriptQuery = vi.fn(async () => []);
+        await adapter.pageTree('X');
+        const q = String((mock.DB.datascriptQuery as any).mock.calls[0][0]);
+        expect(q).toContain(':block/refs');
+        expect(q).toContain(':block/uuid');
+        expect(q).toContain(':block/title');
+        expect(q).not.toContain(':block/content');
+        expect(q).not.toContain('full-title');
+    });
+
+    it('map 查不到的 uuid 原樣保留（不崩、不編造）', async () => {
+        mock.Editor.getPageBlocksTree = vi.fn(async () => PAGE_TREE);
+        mock.DB.datascriptQuery = vi.fn(async () => []);
+        const nodes = await adapter.pageTree('X');
+        expect(nodes![0].text).toBe(PAGE_TREE[0].fullTitle);
+    });
+
+    it('取代查詢失敗 → 降級回原始文字並留 ref-resolve-failed（不拖垮 agent run）', async () => {
+        clearDiag();
+        mock.Editor.getPageBlocksTree = vi.fn(async () => PAGE_TREE);
+        mock.DB.datascriptQuery = vi.fn(async () => { throw { message: 'db-worker has not been initialized' }; });
+        const nodes = await adapter.pageTree('X');
+        expect(nodes![0].text).toBe(PAGE_TREE[0].fullTitle);
+        expect(diagHistory().some(e => e.event === 'ref-resolve-failed')).toBe(true);
+    });
+
+    it('blockTree 同樣取代', async () => {
+        mock.Editor.getBlock = vi.fn(async () => PAGE_TREE[0]);
+        mock.DB.datascriptQuery = vi.fn(async () => REF_ROWS.map(r => r));
+        const node = await adapter.blockTree('b-1');
+        expect(node!.text).toBe('引用 [[ZZTest Apple]] 與 #[[ZZCompany]] 的區塊');
+        expect(node!.children[0].text).toBe('見 ((被引用的區塊文字))');
     });
 });

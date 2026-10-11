@@ -1,7 +1,7 @@
 // tests/markdown.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderMarkdown, clearMarkdownCache, getTxt } from '../src/utils/markdown';
-import { blockText, pageDisplayName, slug } from '../src/graph/text';
+import { blockText, pageDisplayName, slug, resolveBlockRefs } from '../src/graph/text';
 
 beforeEach(() => {
     clearMarkdownCache();
@@ -184,5 +184,43 @@ describe('Phase 1: pageDisplayName / slug', () => {
         expect(slug('#Apple')).toBe('apple');
         expect(slug('Beta Gamma')).toBe('beta gamma');
         expect(slug('中文頁')).toBe('中文頁');
+    });
+});
+
+// N14 修復的純函式面
+describe('Phase 1: resolveBlockRefs 連結取代', () => {
+    const U = '6acb9138-e682-45a5-a6bd-b646c2d34a52';
+    const map = new Map([[U, 'ZZTest Apple']]);
+
+    it('[[uuid]] → 可讀名', () => {
+        expect(resolveBlockRefs(`引用 [[${U}]] 的區塊`, map)).toBe('引用 [[ZZTest Apple]] 的區塊');
+    });
+
+    it('別名形態 [[uuid|label]] 保留 label，只換 uuid', () => {
+        expect(resolveBlockRefs(`[[${U}|我的標籤]]`, map)).toBe('[[ZZTest Apple|我的標籤]]');
+    });
+
+    it('((uuid)) 區塊引用保留原括號形式', () => {
+        expect(resolveBlockRefs(`見 ((${U}))`, map)).toBe('見 ((ZZTest Apple))');
+    });
+
+    it('大小寫不敏感（map 鍵一律小寫）', () => {
+        expect(resolveBlockRefs(`[[${U.toUpperCase()}]]`, map)).toBe('[[ZZTest Apple]]');
+    });
+
+    it('查不到的 uuid 原樣保留', () => {
+        expect(resolveBlockRefs('[[99999999-8888-7777-6666-555544443333]]', map))
+            .toBe('[[99999999-8888-7777-6666-555544443333]]');
+    });
+
+    it('空 map／空字串／非字串安全通過（不拋）', () => {
+        expect(resolveBlockRefs(`[[${U}]]`, new Map())).toBe(`[[${U}]]`);
+        expect(resolveBlockRefs('', map)).toBe('');
+        expect(resolveBlockRefs(undefined as any, map)).toBe(undefined);
+        expect(resolveBlockRefs(null as any, map)).toBe(null);
+    });
+
+    it('純文字不受影響', () => {
+        expect(resolveBlockRefs('家長會談後，沒有連結的一行', map)).toBe('家長會談後，沒有連結的一行');
     });
 });

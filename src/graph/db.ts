@@ -5,8 +5,9 @@
 // 是否加過濾以 N9/N20 的 count 對照為據，未驗證前原樣照計畫文字。
 import '@logseq/libs';
 import { escapeDsString } from '../utils/query';
-import { blockText, slug, toBlockNode, toBlockNodes } from './text';
+import { blockText, resolveBlockRefs, resolveNodeRefs, slug, toBlockNode, toBlockNodes } from './text';
 import { resolveFetchOutcome } from './canary';
+import { diag } from './diag';
 import type {
     BlockNode, FetchBlocksResult, GraphAdapter, GraphKind, IndexableBlock, KeywordHit, RefHit,
 } from './types';
@@ -81,17 +82,49 @@ export class DbGraphAdapter implements GraphAdapter {
         });
     }
 
-    // Editor API 在 DB 同樣可用（Q2）；巢狀結構一致性 [未證：N12]
+    // Editor API 在 DB 同樣可用（Q2）；巢狀結構一致性已於 2.0.2 實測通過（N12：
+    // 3 roots → 28 nodes，未壓平）。結構取自 Editor API，文字經 ref map 取代
+    // 掉 raw [[uuid]]（N14 修復；取代失敗降級為原始文字，不拖垮整個 agent run）。
     async pageTree(pageNameOrUuid: string): Promise<BlockNode[] | null> {
         const blocks = await logseq.Editor.getPageBlocksTree(pageNameOrUuid);
-        return toBlockNodes(blocks);
+        const nodes = toBlockNodes(blocks);
+        if (!nodes) return null;
+        return resolveNodeRefs(nodes, await this.refTitleMap());
     }
 
-    // 不傳 includePage：DB 對頁面 uuid 回「找不到」是已知行為（N13）。
+    // 不傳 includePage：DB 對頁面 uuid 回「找不到」是已知行為（N13 實測 null）。
     // 「此 uuid 是頁面」的區分文案由呼叫端（tools.ts）依 kind 處理（決策 #6）。
     async blockTree(uuid: string): Promise<BlockNode | null> {
         const block = await logseq.Editor.getBlock(uuid, { includeChildren: true });
         if (!block) return null;
-        return toBlockNode(block);
+        const node = toBlockNode(block);
+        const [resolved] = resolveNodeRefs([node], await this.refTitleMap());
+        return resolved;
+    }
+
+    /**
+     * 被引用實體的 uuid→可讀名 map。只用今晚已實證的屬性
+     * （:block/refs / :block/uuid / :block/title），故不需按頁綁定、
+     * 也不必區分呼叫端傳的是頁名或頁 uuid。
+     * 查詢失敗時降級為空 map（回原始 raw 文字）並留診斷記錄，
+     * 不讓頁面上下文／大綱因一條美化的查詢而整個失敗。
+     */
+    private async refTitleMap(): Promise<Map<string, string>> {
+        const map = new Map<string, string>();
+        try {
+            const rows = await logseq.DB.datascriptQuery(`
+                [:find ?u ?t :where [?b :block/refs ?r] [?r :block/uuid ?u] [?r :block/title ?t]]
+            `);
+            for (const row of rows ?? []) {
+                const [u, t] = row as [unknown, unknown];
+                if (typeof u === 'string' && typeof t === 'string' && t) map.set(u.toLowerCase(), t);
+            }
+        } catch (err) {
+            const detail = err instanceof Error ? err.message : (() => {
+                try { return JSON.stringify(err); } catch { return String(err); }
+            })();
+            diag('ref-resolve-failed', detail.slice(0, 200));
+        }
+        return map;
     }
 }

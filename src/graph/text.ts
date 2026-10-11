@@ -34,3 +34,34 @@ export function toBlockNodes(list: any): BlockNode[] | null {
     if (!list) return null;
     return list.map(toBlockNode);
 }
+
+// 2.0.2 實測（N14）：Editor API 的 fullTitle 對連結保留 raw [[uuid]]，
+// 不像 datalog 的 full-title（refs pull）會解析成可讀名。故以「被引用實體的
+// uuid→title」map 做純字串取代——只用已實證的三個屬性，不新增未證屬性面。
+const UUID = '[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}';
+const PAGE_LINK_RE = new RegExp(`\\[\\[(${UUID})(\\|[^\\]]*)?\\]\\]`, 'g');
+const BLOCK_REF_RE = new RegExp(`\\(\\((${UUID})\\)\\)`, 'g');
+
+/** 把 [[uuid]]／(uuid) 取代為被引用實體的可讀名；查不到的原樣保留。 */
+export function resolveBlockRefs(text: string, titles: Map<string, string>): string {
+    if (!text || titles.size === 0) return text;
+    return text
+        .replace(PAGE_LINK_RE, (whole, uuid: string, label?: string) => {
+            const t = titles.get(uuid.toLowerCase());
+            return t ? `[[${t}${label ?? ''}]]` : whole;
+        })
+        .replace(BLOCK_REF_RE, (whole, uuid: string) => {
+            const t = titles.get(uuid.toLowerCase());
+            return t ? `((${t}))` : whole;
+        });
+}
+
+/** 遞迴套用取代，回傳新樹（不改原樹）。 */
+export function resolveNodeRefs(nodes: BlockNode[], titles: Map<string, string>): BlockNode[] {
+    if (titles.size === 0) return nodes;
+    return nodes.map((n) => ({
+        ...n,
+        text: resolveBlockRefs(n.text, titles),
+        children: resolveNodeRefs(n.children, titles),
+    }));
+}
