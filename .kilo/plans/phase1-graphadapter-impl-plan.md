@@ -131,4 +131,21 @@ kind.ts ◄──────┤（純探測，aug 型別生效後去 as any）
 | DB(fake)：查詢含 `:block/title` 無 `:block/content`、映射正確、旗標關＝Phase 0 | C1：`graph-db.test.ts` 字串契約斷言 ＋ `rag-state(2)`／`tools-unavailable` DB 情境原樣綠 |
 | 競態測試通過 | C3：`rag-race.test.ts` |
 | typecheck／test／build 綠 | 每個 commit 推送前全跑；C4 後最終全綠 |
-| 夜版 N0–N17 全過才翻旗標 | 本交付**不翻**、不打 tag、不動 marketplace（§8 順序） |
+| 夜版 N0–N17 全過才翻旗標 | 本交付**不翻**、不打 tag、不動 marketplace（§8 順序）；實測環境見附錄 A |
+
+---
+
+## 附錄 A｜實測環境決策（2026-10-11 補記，偏離來源計畫 §7 措辭）
+
+來源計畫 §7／N0 寫「安裝 DB 版**夜版**」，實測改以 **Desktop APP 2.0.2 (Beta Testing)**（tag `2.0.2`，commit `533ac43`，2026-10-07）為**主要目標**，nightly 降為分診用途。理由：
+
+1. **忠實度**：DB 使用者實際跑 2.0.x beta；N3–N6（側欄掛載，最脆弱一組）照 nightly 測會追到使用者根本不存在的宿主回歸。
+2. **可重現**：nightly 每日變動（`d24abc9`@10-10），N9 count／N12 巢狀結構的異常無法區分是外掛還是宿主改動。beta 釘死在 `533ac43`。
+3. **正中依賴面**：2.0.2 changelog 明列 improved「**plugin APIs**」——本計畫全盤依賴 `datascriptQuery`／`getPageBlocksTree`／`getBlock`／`checkCurrentIsDbGraph`。
+4. **marketplace 佐證**：§8 第 3 條的 `supportsDB: true` PR 應引用發行版本，而非滾動 tag。
+
+nightly 保留單一用途：beta 測出問題時，確認是否已在上游修復（來源計畫的 S1/S2/S3/S6/S8 讀自 master，nightly 是唯一能逐行對上的建置），避免為一個將消失的 bug 寫繞路碼。
+
+**N1 提前為總閘**：裝好後先跑 `getInfo()`（須 `supportDb: true`）＋`checkCurrentIsDbGraph()`（須 `true`），再建 N0 測試圖。N1 不過則 N0–N17 全無意義（探測路徑會直接判 file）。測試報告首行須記 `2.0.2 / 533ac43`。
+
+**旗標語義不變**：硬性約束「§7 夜版 N0–N17 全過才翻旗標」中的「夜版」依本附錄解讀為「真實 DB 版宿主建置」，即以 2.0.2 beta 為準；如需嚴格照字面，則 beta 為主、nightly 複測同一張清單。
