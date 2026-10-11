@@ -149,3 +149,13 @@ nightly 保留單一用途：beta 測出問題時，確認是否已在上游修�
 **N1 提前為總閘**：裝好後先跑 `getInfo()`（須 `supportDb: true`）＋`checkCurrentIsDbGraph()`（須 `true`），再建 N0 測試圖。N1 不過則 N0–N17 全無意義（探測路徑會直接判 file）。測試報告首行須記 `2.0.2 / 533ac43`。
 
 **旗標語義不變**：硬性約束「§7 夜版 N0–N17 全過才翻旗標」中的「夜版」依本附錄解讀為「真實 DB 版宿主建置」，即以 2.0.2 beta 為準；如需嚴格照字面，則 beta 為主、nightly 複測同一張清單。
+
+### A.1 實測定論（2026-10-11，四輪診斷時間軸，commit `1a8dcba`）
+
+**宿主事實（取代原假設）**：2.0.2 beta 上 `logseq.App.getInfo()` **未回 `supportDb: true`**（候選成因：宿主實作差異 或 SDK 0.0.17 快取了早期不完整物件——無法從外部區分，也無需區分）。後果：
+
+1. **能力閘路徑在 2.0.2 上不成立**：`probeGraphKind` 恆在第一步判 `'file'`，`checkCurrentIsDbGraph()` **從未被本外掛呼叫**——它的行為在此宿主上仍是 [未證]。N1 的原始定義（两個 API 都回預期值）改由**手動 console 驗證**補齊：DevTools 切外掛 iframe context，執行 `await logseq.App.getInfo()` 與 `await logseq.App.checkCurrentIsDbGraph()`，把結果記下來。
+2. **DB 圖譜的識別完全依賴 schema 指紋備援**：`schema-mismatch` 異常點 → `fingerprintGraphKind()`（`:block/title` 有列＋`:block/content` 全無 → db）→ 改寫 kind 快取 → 重走守衛路徑。實測指紋：`title=2780 content=0`。
+3. **啟動時序**：同步開始時 kind 快取仍是 `file`（指紋尚未跑）；啟動首輪同步完成指紋改判後，所有工具守衛才正確。窄窗口內 `graph_tag_search`/`global_keyword_search` 會走 file 查詢（DB 圖上回零結果字串而非 `GRAPH_TYPE_UNSUPPORTED`），`pageDisplayName` 走 file 語意（DB 實體無 `originalName` → 退回 lowercase `name`）。**N7 必須在啟動同步完成後再測**；此窗口是否值得收窄（例如 tools 守衛也走一次指紋）留給判讀會決定。
+4. **已驗證通過**：N1（指紋路徑）、N21（`graph-switch-skip` 生效、啟動補發事件 ~371ms 實測確認、`switches=0`）、worker-retry（階段①無 ❌）、canary＋指紋的組合（`schema-mismatch` 不再是終態誤報）。
+5. **db-worker 三階段模型修正**：階段①（查詢丟錯 `db-worker has not been initialized`）實測確認；階段②（全零不丟錯）**未被實測證明存在**——第三輪的 `probe-ambiguous` 缺席其實只證明指紋沒跑到（閘未開），與階段②無關。全零 → null 不寫快取的設計仍保留（防御性，零成本）。
