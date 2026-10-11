@@ -209,3 +209,30 @@ nightly 保留單一用途：beta 測出問題時，確認是否已在上游修�
 - **(a) 先發版、另開任務修**：接受噪音（僅含連結的區塊受影響，純文字區塊乾淨）。
 - **(b) 修後再發版（建議）**：`db.ts` 的 `pageTree`/`blockTree` 維持 Editor API 取**結構**，另以**一條已驗證的 refs-pull 查詢**取該頁所有區塊的 `full-title`，建 uuid→可讀名 map，走樹取代 `text`。成本：每次工具呼叫多 1–2 條查詢（工具頻率低，非熱路徑）；**复用今晚已實證的查詢形狀**（P5／P3），不新增 [未證] 屬性面。純 JS 樹走代，可單元測試覆蓋。
 - **(c) 改走 datalog 重構樹**：需 `:block/parent`／`:block/order` 等**未驗證**欄位，擴大 [未證] 面，發版前不宜。
+
+### A.4 N14 修復實測（2026-10-11，commit `abdfebf`，bundle `main-zn4b0p0q.js`）
+
+採方案 (b) 變體（不按頁綁定、免第二輪夜版）：`db.ts` 維持 Editor API 取結構，另以一條 map 查詢（`:block/refs`＋`:block/uuid`＋`:block/title`，三者今晚皆已實證存在）建 uuid→可讀名，純字串取代。
+
+| 驗項 | 結果 |
+|---|---|
+| V1 map 查詢真實宿主 | ✅ 770 對，樣本 `["6acb9138-…","他和她的距離"]` 等——被引用實體的 uuid→title 可得 |
+| V2 降級痕跡 | ✅ `refFailed: []`，`blockCount: 1684`（與 P3 一致，未受美化查詢影響） |
+| V3 agent 頁面相关问答 | ✅ 全可讀名（`[[ZZCompany]]`、`[[ZZTest Apple]]`），無任何 uuid 字串 |
+| V4 決定性對照 | 同一區塊：Editor API raw = `引用 [[6acba31d-c594-…` → 大綱輸出 = `引用 [[ZZTest Apple]] 與 #[[ZZCompany]] 的區塊` |
+
+**N14 由 ❌ 轉 ✅。** 附帶觀察：`pageTree` 為 `get_page_outline` 與 `agent.ts` 頁面上下文共用，故此修復同時覆蓋兩者。
+
+**殘留（不阻斷）**：`refTitleMap` 每次工具呼叫多一條全圖 map 查詢（本圖 770 對）。工具頻率低、非熱路徑，可接受；若未來大圖（數萬 refs）顯現成本，加 per-graph 快取即可——代價是失效時機管理，發版前不宜。
+
+### A.5 翻旗標閘最終狀態（N0–N17 ＋ R1）
+
+| 狀態 | 項目 |
+|---|---|
+| ✅ 實測過 | N1 N2 N5 N6 N7 N8 N9（count＋解析）N10（tags 支）N11 N12（結構＋巢狀）N13 **N14** N15 N16（本版內） |
+| 裁定非阻斷 | N3／N4（S8 宿主重繪側欄 DOM，與圖譜類型無關，file 圖在 2.0.2 同樣會中）→ 獨立任務 |
+| N/A | N10 同名頁（2.0.2 宿主建不出同名頁）；N17 實機（暖快取抓不到 supersession，採 `rag-race` 六情境 CI 證據＋N21 實機閘證據） |
+| 記錄不修 | N20 recycle 混入（不在 N0–N17 閘內；不自創屬性名，待正確屬性實證）；N16 跨版本 graph.path 漂移（memory.ts 禁碰，舊資料孤兒化未刪除） |
+| ⏳ 待辦 | **R1**：0.10.x 宿主＋file 圖回歸（§7「每個 phase 發版前必跑」） |
+
+**發版順序（§8，R1 結案後一次做完）**：① 翻 `DB_ADAPTER_ENABLED=true` **＋ 根目錄 `manifest.json` 加 `"supportsDB": true`**（必須同 commit 且在打 tag 前——`publish.yml` 於 build 階段透傳 manifest 欄位，tag 之後才改就會發出不帶 DB 標記的 zip）→ ② 驗證 build 產物含該欄位 → ③ 打 `v0.11.0` tag 並推送，觸發 `publish.yml` 自動建 Release＋zip → ④ 送 `logseq/marketplace` PR（同欄位，不加 `supportsDBOnly`／`unsupportedGraphType`）。
