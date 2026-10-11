@@ -6,6 +6,7 @@ import { state } from './config';
 import { logger } from './utils/logger';
 import { getGraphKind, getGraphCacheKey } from './graph/kind';
 import { getAdapter, isGraphUnsupported, resetAdapter } from './graph';
+import { diag, diagHistory, countDiag } from './graph/diag';
 import { SIMILARITY_THRESHOLD } from './graph/types';
 import type { FetchBlocksResult, IndexState, SearchOutcome } from './graph/types';
 
@@ -23,6 +24,10 @@ export function getIndexState(): IndexState {
     return indexState;
 }
 
+export function getSyncGen(): number {
+    return syncGen;
+}
+
 // 圖譜切換的同步重置（§4.5①，handler 第一行）：先讓在飛世代的全部結果作廢，
 // 立即清索引與狀態，再清 adapter/graphKind 快取（切圖＝重算）。
 // 放最前以關閉「事件到 UI 隔離完成」之間舊索引仍可被查詢的窗口。
@@ -31,6 +36,8 @@ export function onGraphSwitched(): void {
     vectorDb = null;
     indexState = { status: 'idle' };
     resetAdapter();
+    // N21：此計數＝onCurrentGraphChanged 實際觸發次數（同圖誤發事件也會被記）
+    diag('graph-switch', `gen→${syncGen}`);
 }
 
 // ==========================================
@@ -92,6 +99,7 @@ async function computeContentHash(content: string): Promise<string> {
 export async function fetchLogseqBlocks(): Promise<FetchBlocksResult> {
     const kind = await getGraphKind();
     if (await isGraphUnsupported(kind)) {
+        diag('db-gated', 'DB_ADAPTER_ENABLED=false');
         return {
             status: 'unsupported',
             kind,
@@ -117,20 +125,29 @@ async function ensureExtractor() {
 }
 
 async function runSync(gen: number) {
+    // 過期輪的每個 await 邊界都帶標籤記錄：N17 要能分辨「死在寫 vectorDb 之前（正確）」
+    // 與「死在之後（bug）」。一回合一最多產生一筆 drop（命中即 return），無需去重。
+    const stale = (where: string): boolean => {
+        if (gen === syncGen) return false;
+        diag('sync-drop', `gen=${gen} cur=${syncGen} at=${where}`);
+        return true;
+    };
+
     // 出隊先驗世代：過期輪不寫 building、不付全圖拉取（review finding 1）
-    if (gen !== syncGen) return;
+    if (stale('entry')) return;
     indexState = { status: 'building', gen };
-    const stale = () => gen !== syncGen;
+    diag('sync-start', `gen=${gen}`);
 
     try {
         const fetched = await fetchLogseqBlocks();
-        if (stale()) return;
+        if (stale('fetch')) return;
 
         if (fetched.status === 'unsupported') {
             const noticeKey = `${await getGraphCacheKey()}|${fetched.reason}`;
-            if (stale()) return;
+            if (stale('noticeKey')) return;
             vectorDb = null;
             indexState = { status: 'unsupported', reason: fetched.reason };
+            diag('fetch-unsupported', `gen=${gen} reason=${fetched.reason}`);
             if (!noticedUnsupported.has(noticeKey)) {
                 noticedUnsupported.add(noticeKey);
                 logseq.UI.showMsg(state.t.ragDbUnsupported, "warning", { timeout: 0 });
@@ -143,22 +160,25 @@ async function runSync(gen: number) {
             // 合法狀態：不彈窗，只記日誌
             vectorDb = null;
             indexState = { status: 'empty' };
+            diag('fetch-empty', `gen=${gen} kind=${fetched.kind}`);
             logger.info("[RAG] 圖譜掃描完成，沒有可索引的非空區塊。");
             return;
         }
 
         const blocks = fetched.blocks;
+        // N9/N20 的對照基準：這一輪到底撈到幾筆、後端是哪一種
+        diag('fetch-ok', `gen=${gen} kind=${fetched.kind} blocks=${blocks.length}`);
 
         // 🎯 取得當前圖譜資訊，確保多個圖譜的資料在快取中不會互相污染
         const graph = await logseq.App.getCurrentGraph();
-        if (stale()) return;
+        if (stale('graphName')) return;
         const graphName = graph?.name || "default_graph";
 
         const processedBlocks = [];
         const blocksToVectorize = [];
 
         const allHashes = await Promise.all(blocks.map(b => computeContentHash(b.content)));
-        if (stale()) return;
+        if (stale('hashes')) return;
         const hashMap = new Map<string, string>();
         blocks.forEach((b, i) => hashMap.set(b.id, allHashes[i]));
 
@@ -166,7 +186,7 @@ async function runSync(gen: number) {
             const contentHash = hashMap.get(block.id)!;
             const cacheKey = `${graphName}_${block.id}_${contentHash}`;
             const cachedEmbedding = await getCachedEmbedding(cacheKey);
-            if (stale()) return;
+            if (stale('cacheRead')) return;
 
             if (cachedEmbedding) {
                 processedBlocks.push({ ...block, embedding: cachedEmbedding });
@@ -174,11 +194,12 @@ async function runSync(gen: number) {
                 blocksToVectorize.push(block);
             }
         }
+        diag('cache-diff', `gen=${gen} cached=${processedBlocks.length} cold=${blocksToVectorize.length}`);
 
         // 🎯 如果有「新成員」，才需要驚動 AI 模型
         if (blocksToVectorize.length > 0) {
             await ensureExtractor();
-            if (stale()) return;
+            if (stale('ensureExtractor')) return;
 
             // 💡 動態替換 {count} 變數
             const indexingMsg = (state.t.ragIndexing || "⏳ 發現 {count} 筆新筆記或修改，正在建立神經索引...").replace('{count}', blocksToVectorize.length.toString());
@@ -189,7 +210,7 @@ async function runSync(gen: number) {
             for (const block of blocksToVectorize) {
                 const contextualText = `頁面名稱：【${block.pageName}】\n筆記內容：${block.content}`;
                 const output = await extractor(contextualText, { pooling: 'mean', normalize: true });
-                if (stale()) return;
+                if (stale('embed')) return;
                 const embedding = Array.from(output.data) as number[];
 
                 processedBlocks.push({ ...block, embedding });
@@ -201,7 +222,7 @@ async function runSync(gen: number) {
 
             // 批次寫入快取，效能最高
             await saveCachedEmbeddings(newEntries);
-            if (stale()) return;
+            if (stale('saveCache')) return;
             logseq.UI.showMsg(state.t.ragSyncDone || "✅ 增量更新完成！", "success");
         } else {
             // 如果全部命中快取，我們就在背景靜默完成，不打擾使用者
@@ -214,14 +235,18 @@ async function runSync(gen: number) {
             schema: { id: 'string', content: 'string', pageName: 'string', embedding: 'vector[512]' }
         });
         await insertMultiple(db, processedBlocks);
-        if (stale()) return;
+        if (stale('buildIndex')) return;
         vectorDb = db;
         indexState = { status: 'ready', blockCount: processedBlocks.length, builtAt: Date.now() };
+        // N9：blockCount 是唯一能跟 Logseq UI 數量對照的數字，務必可見
+        diag('ready', `gen=${gen} blockCount=${processedBlocks.length} graph=${graphName}`);
 
     } catch (err) {
-        if (stale()) return; // 過期輪的例外不污染新輪狀態、不彈錯
+        if (stale('catch')) return; // 過期輪的例外不污染新輪狀態、不彈錯
         vectorDb = null; // 不殘留舊圖索引
-        indexState = { status: 'failed', message: err instanceof Error ? err.message : String(err) };
+        const message = err instanceof Error ? err.message : String(err);
+        indexState = { status: 'failed', message };
+        diag('failed', `gen=${gen} ${message}`);
         logger.error("向量資料庫同步失敗:", err);
         logseq.UI.showMsg(state.t.ragSyncFailed || "❌ 本地 AI 大腦啟動失敗", "error");
     }
@@ -231,6 +256,7 @@ async function runSync(gen: number) {
 // 每輪帶世代 token，過期結果在各 await 邊界丟棄。
 export function syncVectorDB(): Promise<unknown> {
     const gen = ++syncGen;
+    diag('sync-enqueue', `gen=${gen}`);
     const p = syncChain.then(() => runSync(gen));
     syncChain = p.catch(() => undefined); // 序列化鏈不因單輪失敗而斷
     return p;
@@ -296,3 +322,41 @@ export async function getLinkedReferencesForPage(targetPage: string) {
         return (state.t.ragQueryError || `查詢 [[{targetPage}]] 時發生錯誤。`).replace('{targetPage}', targetPage);
     }
 }
+
+// ==========================================
+// 4. 夜版實測診斷（計畫 §7 N9/N17/N20/N21）
+//    logger.info/warn 在 production build 被拔掉，故另建此外露通道。
+// ==========================================
+function describeIndexState(s: IndexState): string {
+    switch (s.status) {
+        case 'ready': return `ready blockCount=${s.blockCount}`;
+        case 'building': return `building gen=${s.gen}`;
+        case 'unsupported': return `unsupported reason=${s.reason}`;
+        case 'failed': return `failed: ${s.message}`;
+        case 'empty': return 'empty';
+        default: return 'idle';
+    }
+}
+
+// 一行摘要：showMsg 用（Logseq toast 不保留換行，長报告会糊）
+export function getRagDiagSummary(): string {
+    return `RAG ${describeIndexState(indexState)} · gen=${syncGen}`
+        + ` · switches=${countDiag('graph-switch')} · drops=${countDiag('sync-drop')}`;
+}
+
+// 全量時間軸：logger.error 用（error 是 prod 唯一抵達使用者的 log 層）
+export function getRagDiagReport(): string {
+    const lines = diagHistory().map(
+        (e) => `${String(e.ms).padStart(7)}ms  ${e.event}${e.detail ? `  | ${e.detail}` : ''}`
+    );
+    return [`[Impeller RAG diag] ${describeIndexState(indexState)} · gen=${syncGen}`, ...lines].join('\n');
+}
+
+// DevTools 需先把 context 切到本插件的 iframe（Logseq 外掛跑在 iframe 內）再呼叫，
+// 用於需要原始 payload 的情境（例：N19 想交叉比對 txData）。
+(globalThis as any).__impellerDiag = () => ({
+    state: indexState,
+    gen: syncGen,
+    summary: getRagDiagSummary(),
+    history: diagHistory().slice(),
+});

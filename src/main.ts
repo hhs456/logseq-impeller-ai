@@ -5,7 +5,7 @@ import { panel } from './panel';
 import { actions } from './actions';
 import { renderUI, scheduleRender } from './ui';
 import { installEventDelegation, uninstallEventDelegation } from './ui/events';
-import { syncVectorDB, onGraphSwitched } from './rag';
+import { syncVectorDB, onGraphSwitched, getRagDiagSummary, getRagDiagReport } from './rag';
 import { getStaticPromptParts } from './prompts';
 import { MemoryManager } from './memory';
 import { encryptApiKey, decryptApiKey, AES_PREFIX } from './utils/crypto';
@@ -267,6 +267,16 @@ async function main() {
         if (!confirm(state.t.purgeConfirm)) return;
         const removed = MemoryManager.purgeOtherGraphChats();
         logseq.UI.showMsg(state.t.purgeDone.replace('{count}', String(removed)), 'success');
+    });
+
+    // 夜版實測診斷（計畫 §7）：blockCount／世代／丟棄計數的 production 可見外露。
+    // 摘要走 showMsg（使用者看得见），全量時間軸走 logger.error（prod 唯一抵達的 log 層）
+    logseq.App.registerCommandPalette({
+        key: 'rag-diag',
+        label: 'Impeller AI: RAG 同步診斷 (Graph Diagnostics)',
+    }, async () => {
+        logseq.UI.showMsg(getRagDiagSummary(), 'info', { timeout: 0 });
+        logger.error(getRagDiagReport());
     });
 
     // --- 路由切換監聽 ---

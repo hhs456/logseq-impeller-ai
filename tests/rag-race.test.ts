@@ -259,3 +259,87 @@ describe('切圖競態（§4.5／N17）', () => {
         expect((mock.DB.datascriptQuery as any).mock.calls.length).toBe(callsAfterA);
     });
 });
+
+// 診斷外露是夜版判讀的唯一依據（logger.info/warn 在 prod 被拔掉），故要有測試
+describe('診斷外露（N9 blockCount／N17 丟棄點／N21 切圖計數）', () => {
+    it('遲到輪記錄死在哪個邊界，ready 帶 blockCount，摘要計數正確', async () => {
+        const rowsA = [fileBlockRow('diag-a-1', 'ALPHA diag', 'Page A')];
+        const rowsB = [fileBlockRow('diag-b-1', 'BETA diag', 'Page B')];
+        const gate = deferred<any[]>();
+        mock.DB.datascriptQuery = gateableFetch(gate, rowsB);
+
+        const rag = await loadRag();
+        const pA = rag.syncVectorDB();
+        await waitFor(() => (mock.DB.datascriptQuery as any).mock.calls.length === 1, 'A fetch started');
+        rag.onGraphSwitched();
+        const pB = rag.syncVectorDB();
+
+        gate.resolve(rowsA.map((r) => [r]));
+        await pA;
+        await pB;
+
+        const report = rag.getRagDiagReport();
+        // N17 的判讀點：必須看見 at=fetch（寫 vectorDb 之前），而非 at=buildIndex
+        expect(report).toContain('sync-drop');
+        expect(report).toContain('at=fetch');
+        expect(report).not.toContain('at=buildIndex');
+        // N9 的判讀點：blockCount 要在報告裡可读
+        expect(report).toContain('fetch-ok');
+        expect(report).toContain('blocks=1');
+        expect(report).toContain('ready');
+        expect(report).toContain('blockCount=1');
+
+        const summary = rag.getRagDiagSummary();
+        expect(summary).toContain('drops=1');
+        expect(summary).toContain('switches=1');
+        expect(summary).toContain('blockCount=1');
+    });
+
+    it('N21：同圖誤發事件也要被計數（switches 是判讀依據）', async () => {
+        const rows = [fileBlockRow('diag-c-1', 'switch count', 'Page C')];
+        mock.DB.datascriptQuery = vi.fn(async (query: string) => {
+            if (query.includes('(count')) return 0;
+            return rows.map((r) => [r]);
+        });
+
+        const rag = await loadRag();
+        await rag.syncVectorDB();
+        expect(rag.getRagDiagSummary()).toContain('switches=0');
+
+        rag.onGraphSwitched();
+        rag.onGraphSwitched();
+        expect(rag.getRagDiagSummary()).toContain('switches=2');
+    });
+
+    it('旗標關的 DB 圖譜：db-gated 可見（證明閘生效而非靜默）', async () => {
+        mock.App.getInfo = vi.fn(async () => ({ version: '0.11.0', supportDb: true }));
+        mock.App.checkCurrentIsDbGraph = vi.fn(async () => true);
+
+        const rag = await loadRag();
+        await rag.syncVectorDB();
+
+        expect(rag.getRagDiagReport()).toContain('db-gated');
+        expect(rag.getRagDiagReport()).toContain('fetch-unsupported');
+        expect(rag.getRagDiagReport()).toContain('reason=db-adapter-disabled');
+    });
+
+    it('globalThis.__impellerDiag 可供 DevTools（iframe context）直接讀取', async () => {
+        const rows = [fileBlockRow('diag-d-1', 'global hook', 'Page D')];
+        mock.DB.datascriptQuery = vi.fn(async (query: string) => {
+            if (query.includes('(count')) return 0;
+            return rows.map((r) => [r]);
+        });
+
+        const rag = await loadRag();
+        await rag.syncVectorDB();
+
+        const hook = (globalThis as any).__impellerDiag;
+        expect(typeof hook).toBe('function');
+        const snap = hook();
+        expect(snap.state.status).toBe('ready');
+        expect(snap.state.blockCount).toBe(1);
+        expect(typeof snap.gen).toBe('number');
+        expect(Array.isArray(snap.history)).toBe(true);
+        expect(snap.summary).toBe(rag.getRagDiagSummary());
+    });
+});
